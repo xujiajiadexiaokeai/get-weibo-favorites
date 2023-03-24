@@ -13,7 +13,6 @@ import (
 type weibo struct {
 	id         string
 	isLongText bool // “查看更多”
-	url        string
 	text       string
 	links      []string // “网页链接”
 }
@@ -22,11 +21,13 @@ var (
 	srcCookie = "your cookie"
 	baseUrl   = "https://weibo.com/ajax/favorites/all_fav?"
 	page      = 1
-	weiboList = make([]*weibo, 0, 10000)
+	weiboChan = make(chan weibo, 1000)
 )
 
 func getFav() {
 	ch := make(chan struct{}, 2)
+	defer close(ch)
+	defer close(weiboChan)
 	done := false
 
 	for !done {
@@ -64,31 +65,29 @@ func getFav() {
 						weibo.links = append(weibo.links, uu["long_url"].(string))
 					}
 				}
-				weiboList = append(weiboList, &weibo)
+				weiboChan <- weibo
 			}
 
 			<-ch
 		}()
 		page++
 	}
-	saveDataToFile(weiboList)
 }
 
-func saveDataToFile(weiboList []*weibo) {
+func main() {
 	f, err := os.OpenFile("favorites.csv", os.O_CREATE|os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer f.Close()
-
-	for _, w := range weiboList {
-		_, err := f.WriteString(w.id + "\t" + w.text + "\t" + fmt.Sprintf("%t", w.isLongText) + "\t" + strings.Join(w.links, " , ") + "\n")
-		if err != nil {
-			log.Fatalln(err)
+	go func() {
+		for w := range weiboChan {
+			_, err := f.WriteString(fmt.Sprintf("%s\t%s\t%t\t%s\n", w.id, w.text, w.isLongText, strings.Join(w.links, " , ")))
+			if err != nil {
+				log.Fatalln(err)
+			}
 		}
-	}
-}
+	}()
 
-func main() {
 	getFav()
 }
