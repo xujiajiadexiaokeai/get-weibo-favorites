@@ -70,11 +70,17 @@ type weibo struct {
 	isLongText bool // “查看更多”
 	text       string
 	links      []string // “网页链接”
+	url        string
 }
 
 func parseWeibo(d map[string]any) weibo {
 	weibo := weibo{}
 	weibo.id = d["idstr"].(string)
+	// weibo.url https://weibo.com/<user.idstr>/<mblogid>
+	if _, ok := d["user"]; ok {
+		user := d["user"].(map[string]any)
+		weibo.url = fmt.Sprintf("https://weibo.com/%v/%v", user["idstr"].(string), d["mblogid"].(string))
+	}
 	if _, ok := d["isLongText"]; ok {
 		weibo.isLongText = d["isLongText"].(bool)
 	}
@@ -118,7 +124,7 @@ var rootCmd = &cobra.Command{
 		wg := new(sync.WaitGroup)
 		go func() {
 			for w := range weiboChan {
-				_, err := f.WriteString(fmt.Sprintf("%s\t%s\t%t\t%s\n", w.id, w.text, w.isLongText, strings.Join(w.links, " , ")))
+				_, err := f.WriteString(fmt.Sprintf("%s\t%s\t%s\t%t\t%s\n", w.id, w.url, w.text, w.isLongText, strings.Join(w.links, " , ")))
 				if err != nil {
 					log.Fatalln(err)
 				}
