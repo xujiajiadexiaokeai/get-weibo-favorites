@@ -1,6 +1,3 @@
-get-weibo-favorites
----
-
 # Weibo Favorites Backup Tool
 
 This is a command-line tool for backing up and restoring Weibo favorites ("我的收藏"). With this tool, you can easily download all of your favorite Weibo posts and save them to your local machine.
