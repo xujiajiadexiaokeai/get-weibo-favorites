@@ -1,4 +1,4 @@
-module github.com/xujiajiadexiaokeai/weibo-favorites
+module github.com/xujiajiadexiaokeai/get-weibo-favorites
 
 go 1.18
 

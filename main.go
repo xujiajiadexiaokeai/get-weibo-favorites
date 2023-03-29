@@ -94,14 +94,16 @@ func parseWeibo(d map[string]any) weibo {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "get-weibo-favorites",
-	Short: "A command-line tool to crawl Weibo favorites",
-	Long:  `A command-line tool to crawl Weibo favorites and save them to a CSV file.`,
-	Args:  cobra.MinimumNArgs(1),
+	Use:     "get-weibo-favorites",
+	Example: "  get-weibo-favorites -c <your-weibo-cookie>",
+	Short:   "A command-line tool to crawl Weibo favorites",
+	Long:    `A command-line tool to crawl Weibo favorites and save them to a CSV file.`,
 	PreRun: func(cmd *cobra.Command, args []string) {
 		cookie, _ := cmd.Flags().GetString("cookie")
 		if cookie == "" {
-			log.Fatal("cookie is required")
+			log.Println("cookie is required")
+			cmd.Help()
+			os.Exit(1)
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
