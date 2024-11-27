@@ -1,114 +1,125 @@
 # weibo_crawler.py
 
-import requests
 import json
-import time
 import logging
-from typing import Dict, List, Optional
-from requests.exceptions import RequestException
 from datetime import datetime
-from database import save_weibo, create_table
+from typing import Dict, List, Optional
+from pathlib import Path
+from time import sleep
 
-# 设置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+import requests
+from requests.exceptions import RequestException
+
+from utils import setup_logger
+from weibo_auth import load_cookies, create_session
+
+# 设置日志记录器
+logger = setup_logger()
 
 BASE_URL = "https://weibo.com/ajax/favorites/all_fav"
 REQUEST_DELAY = 2  # 请求间隔秒数
 
-def load_cookies() -> List[Dict]:
-    """从文件加载cookies"""
-    try:
-        with open('weibo_cookies.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logger.error("Cookie文件不存在，请先运行 get_weibo_cookies.py 获取cookies")
-        raise
-    except json.JSONDecodeError:
-        logger.error("Cookie文件格式错误")
-        raise
-
-def create_session() -> requests.Session:
-    """创建并配置requests会话"""
-    session = requests.Session()
-    cookies = load_cookies()
-    for cookie in cookies:
-        session.cookies.set(cookie['name'], cookie['value'])
-    
-    # 设置请求头
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'Referer': 'https://weibo.com/fav',
-    })
-    
-    return session
-
-def get_weibo_fav(page_number: int = 0) -> List[Dict]:
-    """获取微博收藏列表
+def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
+    """获取指定页的收藏列表
     
     Args:
-        page_number: 要获取的页数，0表示获取所有页
+        session: 请求会话
+        page: 页码
         
     Returns:
         收藏列表
     """
-    session = create_session()
+    try:
+        response = session.get(
+            BASE_URL,
+            params={"page": page}
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        # 打印响应数据结构
+        logger.info(f"API响应数据结构: {json.dumps(data, ensure_ascii=False, indent=2)}")
+        
+        favorites = data.get("data", [])
+        if not favorites:
+            logger.info("没有更多数据了")
+        return favorites
+        
+    except Exception as e:
+        logger.error(f"获取第 {page} 页数据失败: {str(e)}")
+        return []
+
+def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
+    """爬取微博收藏
+    
+    Args:
+        cookies: cookies列表
+        page_number: 要爬取的页数，0表示爬取所有页
+        
+    Returns:
+        收藏列表
+    """
+    session = create_session(cookies)
     all_favorites = []
+    empty_weibos = []  # 用于存储空文本的微博
     page = 1
     
     try:
         while True:
             logger.info(f"正在获取第 {page} 页")
-            params = {
-                'page': page,
-                '_t': int(time.time() * 1000)  # 添加时间戳避免缓存
-            }
             
-            try:
-                response = session.get(BASE_URL, params=params)
-                response.raise_for_status()
-                
-                data = response.json()
-                if not isinstance(data, dict):
-                    logger.error(f"返回数据格式错误: {data}")
-                    break
-                
-                favorites = data.get("data", [])
-                if not favorites:
-                    logger.info("没有更多数据了")
-                    break
-                
-                # 如果是第一页，打印第一条数据的结构
-                if page == 1:
-                    logger.info("第一页第一条数据结构:")
-                    logger.info(json.dumps(favorites[0], ensure_ascii=False, indent=2))
-                
-                parsed_favorites = [parse_weibo(item) for item in favorites]
-                all_favorites.extend(parsed_favorites)
-                
-                if page_number != 0 and page >= page_number:
-                    break
-                
-                page += 1
-                time.sleep(REQUEST_DELAY)  # 添加请求延迟
-                
-            except RequestException as e:
-                logger.error(f"请求错误: {str(e)}")
+            favorites = get_favorites(session, page)
+            if not favorites:
                 break
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON解析错误: {str(e)}")
+                
+            # 如果是第一页，打印第一条数据的结构
+            if page == 1:
+                logger.info("第一页第一条数据结构:")
+                logger.info(json.dumps(favorites[0], ensure_ascii=False, indent=2))
+            
+            for item in favorites:
+                weibo = parse_weibo(item)
+                
+                # 检查文本是否为空
+                if not weibo.get("text", "").strip():
+                    empty_weibos.append({
+                        "id": weibo["id"],
+                        "url": weibo["url"]
+                    })
+                    logger.warning(f"发现空文本微博 - ID: {weibo['id']}, URL: {weibo['url']}")
+                else:
+                    all_favorites.append(weibo)
+                    # 保存到数据库
+                    try:
+                        # save_weibo(weibo)
+                        pass
+                    except Exception as e:
+                        logger.error(f"保存到数据库失败: {str(e)}")
+            
+            # 保存到文件
+            with open("favorites.json", "w", encoding="utf-8") as f:
+                json.dump(all_favorites, f, ensure_ascii=False, indent=2)
+            
+            if page_number != 0 and page >= page_number:
                 break
-            except Exception as e:
-                logger.error(f"未知错误: {str(e)}")
-                break
+            
+            page += 1
+            sleep(REQUEST_DELAY)
+    
+    except Exception as e:
+        logger.error(f"爬取过程出错: {str(e)}")
     
     finally:
         session.close()
+        
+        # 输出统计信息
+        logger.info(f"成功获取 {len(all_favorites)} 条有效收藏")
+        if empty_weibos:
+            logger.warning(f"发现 {len(empty_weibos)} 条空文本微博:")
+            for weibo in empty_weibos:
+                logger.warning(f"  - ID: {weibo['id']}, URL: {weibo['url']}")
+        
+        logger.info("数据已保存到 favorites.json")
     
     return all_favorites
 
@@ -146,12 +157,6 @@ def parse_weibo(data: Dict) -> Dict:
             "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        # 保存到数据库
-        try:
-            save_weibo(weibo)
-        except Exception as e:
-            logger.error(f"保存到数据库失败: {str(e)}")
-        
         return weibo
     except Exception as e:
         logger.error(f"解析微博数据时出错: {str(e)}")
@@ -161,19 +166,21 @@ def parse_weibo(data: Dict) -> Dict:
             "raw_data": data
         }
 
-if __name__ == '__main__':
+def main():
+    """主函数"""
     try:
-        # 初始化数据库表
-        create_table()
+        # 加载cookies
+        cookies = load_cookies()
+        if not cookies:
+            logger.error("无法加载cookies，请先运行 get_weibo_cookies.py 获取cookies")
+            return
         
-        # 获取前5页数据作为测试
-        favorites = get_weibo_fav(5)
-        logger.info(f"成功获取 {len(favorites)} 条收藏")
-        
-        # 保存到文件
-        with open('favorites.json', 'w', encoding='utf-8') as f:
-            json.dump(favorites, f, ensure_ascii=False, indent=2)
-        logger.info("数据已保存到 favorites.json")
+        # 获取收藏数据
+        favorites = crawl_favorites(cookies)
         
     except Exception as e:
         logger.error(f"程序执行出错: {str(e)}")
+        raise
+
+if __name__ == "__main__":
+    main()
