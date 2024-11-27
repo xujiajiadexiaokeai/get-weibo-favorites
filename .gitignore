@@ -20,11 +20,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-env/
-ENV/
-
 # IDE
 .idea/
 .vscode/
@@ -32,11 +27,7 @@ ENV/
 *.swo
 
 # Project specific
-*.db
-*.json
-*.log
-*.csv
-cookies.txt
-chromedriver
-
+data/*.json
+data/*.db
+logs/*.log
 .DS_Store

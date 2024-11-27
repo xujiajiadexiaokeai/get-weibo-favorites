@@ -13,15 +13,15 @@ I collected too many posts in Weibo, which was inconvenient to manage. After a p
 To install the Weibo Favorites Crawler, follow these steps:
 
 1. Clone the repository:
-    ```bash
-    git clone https://github.com/xujiajiadexiaokeai/get-weibo-favorites.git
-    cd get-weibo-favorites
-    ```
+```bash
+git clone https://github.com/xujiajiadexiaokeai/get-weibo-favorites.git
+cd get-weibo-favorites
+```
 
 2. Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+pip install -e .
+```
 
 ## Usage
 
@@ -35,37 +35,46 @@ The crawler consists of two main scripts:
 First, you need to get your Weibo cookies:
 
 ```bash
-python weibo_auth.py
+python -m weibo_favorites.auth
 ```
 
 This will:
 1. Open a Chrome browser window
 2. Navigate to Weibo's login page
 3. Wait for you to manually log in
-4. Save your cookies to `weibo_cookies.json` after successful login
+4. Save your cookies to `data/weibo_cookies.json` after successful login
 
 ### Crawling Favorites
 
 After obtaining the cookies, you can start crawling your favorites:
 
 ```bash
-python weibo_crawler.py
+python -m weibo_favorites.crawler
 ```
 
 The script will:
-1. Load cookies from `weibo_cookies.json`
+1. Load cookies from `data/weibo_cookies.json`
 2. Fetch your Weibo favorites page by page
-3. Save the results to `favorites.json`
+3. Save the results to `data/favorites.json`
 
 ### Testing
 
 To test if the crawler is working correctly:
 
 ```bash
-python test_crawler.py
+python -m pytest tests/
 ```
 
-This will attempt to fetch the first page of your favorites and save them to `test_favorites.json`.
+This will attempt to fetch the first page of your favorites and save them to `data/test_favorites.json`.
+
+## Configuration
+
+All configuration items are managed in `src/weibo_favorites/config.py`:
+
+- Data file paths: `DATA_DIR`
+- Log file paths: `LOGS_DIR`
+- API configuration: `BASE_URL`, `REQUEST_DELAY`
+- Logging configuration: `LOG_LEVEL`, `LOG_FORMAT`
 
 ## Data Format
 

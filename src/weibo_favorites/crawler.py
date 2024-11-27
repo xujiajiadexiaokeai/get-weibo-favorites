@@ -6,18 +6,17 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 from time import sleep
+import traceback
 
 import requests
 from requests.exceptions import RequestException
 
-from utils import setup_logger
-from weibo_auth import load_cookies, create_session
+from . import config
+from .utils import setup_logger
+from .auth import load_cookies, create_session
 
 # 设置日志记录器
 logger = setup_logger()
-
-BASE_URL = "https://weibo.com/ajax/favorites/all_fav"
-REQUEST_DELAY = 2  # 请求间隔秒数
 
 def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
     """获取指定页的收藏列表
@@ -31,7 +30,7 @@ def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
     """
     try:
         response = session.get(
-            BASE_URL,
+            config.BASE_URL,
             params={"page": page}
         )
         response.raise_for_status()
@@ -97,14 +96,14 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
                         logger.error(f"保存到数据库失败: {str(e)}")
             
             # 保存到文件
-            with open("favorites.json", "w", encoding="utf-8") as f:
+            with open(config.FAVORITES_FILE, "w", encoding="utf-8") as f:
                 json.dump(all_favorites, f, ensure_ascii=False, indent=2)
             
             if page_number != 0 and page >= page_number:
                 break
             
             page += 1
-            sleep(REQUEST_DELAY)
+            sleep(config.REQUEST_DELAY)
     
     except Exception as e:
         logger.error(f"爬取过程出错: {str(e)}")

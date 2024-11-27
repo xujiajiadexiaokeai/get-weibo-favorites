@@ -10,7 +10,8 @@ import traceback
 from typing import List, Dict
 import requests
 
-from utils import setup_logger
+from . import config
+from .utils import setup_logger
 
 # 设置日志记录器
 logger = setup_logger()
@@ -22,7 +23,7 @@ def load_cookies() -> List[Dict]:
         cookies列表
     """
     try:
-        with open("weibo_cookies.json", "r", encoding="utf-8") as f:
+        with open(config.COOKIES_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
         logger.error("Cookie文件不存在，请先运行 weibo_auth.py 获取cookies")
@@ -73,6 +74,7 @@ def get_weibo_cookies():
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--start-maximized')
+        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         
         logger.info("正在启动浏览器...")
         # 初始化浏览器
@@ -107,13 +109,11 @@ def get_weibo_cookies():
         # 获取所有 cookies
         cookies = driver.get_cookies()
         
-        logger.info(f"成功获取到 {len(cookies)} 个 cookies")
-        
-        # 将 cookies 保存到文件
-        with open('weibo_cookies.json', 'w', encoding='utf-8') as f:
+        # 保存cookies到文件
+        with open(config.COOKIES_FILE, 'w', encoding='utf-8') as f:
             json.dump(cookies, f, ensure_ascii=False, indent=2)
-        
-        logger.info("Cookies 已保存到 weibo_cookies.json 文件中")
+            
+        logger.info("成功保存cookies")
         return cookies
         
     except WebDriverException as e:
@@ -127,11 +127,9 @@ def get_weibo_cookies():
         logger.error(traceback.format_exc())
         return None
     finally:
-        if driver:
-            try:
-                logger.info("正在关闭浏览器...")
-                driver.quit()
-            except Exception as e:
+        try:
+            driver.quit()
+        except Exception as e:
                 logger.error(f"关闭浏览器时发生错误: {str(e)}")
 
 if __name__ == '__main__':
