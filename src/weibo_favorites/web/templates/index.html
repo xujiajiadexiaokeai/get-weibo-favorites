@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}爬虫状态 - 微博收藏管理{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>爬虫状态</h2>
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">当前状态</h5>
+                <p class="card-text">
+                    <strong>更新时间：</strong>{{ current_time }}<br>
+                    <strong>爬虫状态：</strong><pre>{{ crawler_state }}</pre>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <h2>最新日志</h2>
+        <div class="log-container" id="logContainer">
+            {% for log in logs %}
+            <div class="log-line">{{ log }}</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 自动刷新日志
+function refreshLogs() {
+    fetch('/api/logs')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('logContainer');
+            container.innerHTML = data.logs.map(log => `<div class="log-line">${log}</div>`).join('');
+            container.scrollTop = container.scrollHeight;
+        })
+        .catch(console.error);
+}
+
+// 每30秒刷新一次
+setInterval(refreshLogs, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}收藏列表 - 微博收藏管理{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>收藏列表 <small class="text-muted">共 {{ total }} 条</small></h2>
+        
+        {% for item in items %}
+        <div class="weibo-card">
+            <div class="weibo-content">
+                {{ item.text_html|safe }}
+            </div>
+            <div class="weibo-meta mt-2">
+                <span class="me-3">
+                    <i class="bi bi-person"></i> {{ item.user_name }}
+                </span>
+                <span class="me-3">
+                    <i class="bi bi-clock"></i> {{ item.created_at }}
+                </span>
+                <span>
+                    <i class="bi bi-link-45deg"></i>
+                    <a href="{{ item.url }}" target="_blank">原文链接</a>
+                </span>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if total_pages > 1 %}
+        <nav>
+            <ul class="pagination">
+                {% if page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('favorites', page=page-1) }}">&laquo; 上一页</a>
+                </li>
+                {% endif %}
+
+                {% for p in range(max(1, page-2), min(total_pages+1, page+3)) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('favorites', page=p) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if page < total_pages %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('favorites', page=page+1) }}">下一页 &raquo;</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
