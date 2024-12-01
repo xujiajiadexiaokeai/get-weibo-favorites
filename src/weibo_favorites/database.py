@@ -1,10 +1,11 @@
 # database.py
 
 import sqlite3
-from config import DATABASE_PATH
+from typing import List, Dict, Any
+from . import config
 
 def create_table():
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(config.DATABASE_FILE)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS weibo_favorites (
@@ -13,19 +14,18 @@ def create_table():
             url TEXT,
             user_name TEXT,
             user_id TEXT,
-            is_long_text BOOLEAN,
+            is_long_text INTEGER,
             text TEXT,
             text_html TEXT,
             source TEXT,
             links TEXT,
             collected_at TEXT
-        )
-    ''')
+        )''')
     conn.commit()
     conn.close()
 
-def save_weibo(weibos: List[Dict]):
-    conn = sqlite3.connect(DATABASE_PATH)
+def save_weibo(weibos: List[Dict[str, Any]]):
+    conn = sqlite3.connect(config.DATABASE_FILE)
     cursor = conn.cursor()
     for weibo in weibos:
         cursor.execute('''

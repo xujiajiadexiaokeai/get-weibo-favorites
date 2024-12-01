@@ -60,11 +60,17 @@ def favorites():
     # 获取总数
     total = cursor.execute('SELECT COUNT(*) FROM weibo_favorites').fetchone()[0]
     
+    # TODO: 修改created_at字段格式，然后优化查询
     # 获取分页数据
     offset = (page - 1) * per_page
     cursor.execute('''
         SELECT * FROM weibo_favorites 
-        ORDER BY collected_at DESC 
+        ORDER BY strftime('%Y-%m-%d %H:%M:%S', 
+            REPLACE(
+                REPLACE(created_at, ' +0800', ''),
+                'Sun ', ''
+            )
+        ) DESC 
         LIMIT ? OFFSET ?
     ''', (per_page, offset))
     items = cursor.fetchall()

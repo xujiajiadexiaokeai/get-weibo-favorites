@@ -14,6 +14,7 @@ from requests.exceptions import RequestException
 from . import config
 from .utils import setup_logger
 from .auth import load_cookies, create_session
+from .database import save_weibo
 
 # 设置日志记录器
 logger = setup_logger()
@@ -35,9 +36,6 @@ def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
         )
         response.raise_for_status()
         data = response.json()
-        
-        # 打印响应数据结构
-        logger.info(f"API响应数据结构: {json.dumps(data, ensure_ascii=False, indent=2)}")
         
         favorites = data.get("data", [])
         if not favorites:
@@ -146,7 +144,7 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
             }
             save_crawler_state(new_state)
             logger.info(f"成功获取 {len(all_favorites)} 条有效收藏")
-            
+
             # 保存爬取结果all_favorites
             with open(config.FAVORITES_FILE, 'w', encoding='utf-8') as f:
                 json.dump(all_favorites, f, ensure_ascii=False, indent=2)
