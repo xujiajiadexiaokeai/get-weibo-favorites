@@ -24,27 +24,28 @@ def create_table():
     conn.commit()
     conn.close()
 
-def save_weibo(weibo):
+def save_weibo(weibos: List[Dict]):
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute('''
-        INSERT OR REPLACE INTO weibo_favorites (
-            id, created_at, url, user_name, user_id, is_long_text, text, text_html,
-            source, links, collected_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        weibo['id'],
-        weibo['created_at'],
-        weibo['url'],
-        weibo['user_name'],
-        weibo['user_id'],
-        weibo['is_long_text'],
-        weibo['text'],
-        weibo['text_html'],
-        weibo['source'],
-        ','.join(weibo['links']),
-        weibo['collected_at']
-    ))
+    for weibo in weibos:
+        cursor.execute('''
+            INSERT OR REPLACE INTO weibo_favorites (
+                id, created_at, url, user_name, user_id, is_long_text, text, text_html,
+                source, links, collected_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            weibo['id'],
+            weibo['created_at'],
+            weibo['url'],
+            weibo['user_name'],
+            weibo['user_id'],
+            weibo['is_long_text'],
+            weibo['text'],
+            weibo['text_html'],
+            weibo['source'],
+            ','.join(weibo['links']),
+            weibo['collected_at']
+        ))
     conn.commit()
     conn.close()

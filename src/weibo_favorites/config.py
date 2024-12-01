@@ -18,6 +18,7 @@ LOGS_DIR.mkdir(exist_ok=True)
 COOKIES_FILE = DATA_DIR / "weibo_cookies.json"
 FAVORITES_FILE = DATA_DIR / "favorites.json"
 DATABASE_FILE = DATA_DIR / "weibo_favorites.db"
+CRAWLER_STATE_FILE = DATA_DIR / "crawler_state.json"  # 新增：爬虫状态文件
 
 # Weibo API configuration
 BASE_URL = "https://weibo.com/ajax/favorites/all_fav"

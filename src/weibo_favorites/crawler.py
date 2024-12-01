@@ -48,56 +48,81 @@ def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
         logger.error(f"获取第 {page} 页数据失败: {str(e)}")
         return []
 
+def load_crawler_state() -> dict:
+    """加载爬虫状态
+    
+    Returns:
+        包含上次爬取状态的字典
+    """
+    try:
+        with open(config.CRAWLER_STATE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"last_id": None, "last_crawl_time": None}
+
+def save_crawler_state(state: dict):
+    """保存爬虫状态
+    
+    Args:
+        state: 包含爬取状态的字典
+    """
+
+    # TODO: 日志记录本次爬取状态
+    with open(config.CRAWLER_STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
 def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
     """爬取微博收藏
     
     Args:
         cookies: cookies列表
-        page_number: 要爬取的页数，0表示爬取所有页
+        page_number: 要爬取的页数，0表示爬取所有页或直到重复内容为止
         
     Returns:
         收藏列表
     """
-    session = create_session(cookies)
     all_favorites = []
     empty_weibos = []  # 用于存储空文本的微博
     page = 1
     
+    # TODO: 测试时不更新状态或者另外保存?
+    # 加载上次爬取状态
+    state = load_crawler_state()
+    last_id = state.get("last_id")
+    
+    # 初始化session
+    session = create_session(cookies)
+
     try:
         while True:
-            logger.info(f"正在获取第 {page} 页")
+            logger.info(f"正在爬取第 {page} 页...")
             
+            # 获取收藏列表
             favorites = get_favorites(session, page)
             if not favorites:
+                logger.info("没有更多收藏了")
                 break
-                
-            # 如果是第一页，打印第一条数据的结构
-            if page == 1:
-                logger.info("第一页第一条数据结构:")
-                logger.info(json.dumps(favorites[0], ensure_ascii=False, indent=2))
-            
+            # 检查是否遇到重复内容
+            found_duplicate = False
+            # 遍历收藏列表
             for item in favorites:
                 weibo = parse_weibo(item)
+                # 检查是否遇到已爬取的内容
+                found_duplicate = check_duplicate(last_id, weibo['id'])
+                if found_duplicate:
+                    break
                 
                 # 检查文本是否为空
-                if not weibo.get("text", "").strip():
+                if check_empty_text(weibo):
                     empty_weibos.append({
                         "id": weibo["id"],
                         "url": weibo["url"]
                     })
-                    logger.warning(f"发现空文本微博 - ID: {weibo['id']}, URL: {weibo['url']}")
                 else:
                     all_favorites.append(weibo)
-                    # 保存到数据库
-                    try:
-                        # save_weibo(weibo)
-                        pass
-                    except Exception as e:
-                        logger.error(f"保存到数据库失败: {str(e)}")
             
-            # 保存到文件
-            with open(config.FAVORITES_FILE, "w", encoding="utf-8") as f:
-                json.dump(all_favorites, f, ensure_ascii=False, indent=2)
+            if found_duplicate:
+                break
             
             if page_number != 0 and page >= page_number:
                 break
@@ -112,15 +137,60 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
         session.close()
         
         # 输出统计信息
-        logger.info(f"成功获取 {len(all_favorites)} 条有效收藏")
+        # 如果有新数据，更新状态并保存
+        if all_favorites:
+            # 更新爬虫状态
+            new_state = {
+                "last_id": all_favorites[0]['id'],  # 第一条是最新的
+                "last_crawl_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            save_crawler_state(new_state)
+            logger.info(f"成功获取 {len(all_favorites)} 条有效收藏")
+            
+            # 保存爬取结果all_favorites
+            with open(config.FAVORITES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(all_favorites, f, ensure_ascii=False, indent=2)
+            logger.info("数据已保存到 favorites.json")
+
         if empty_weibos:
             logger.warning(f"发现 {len(empty_weibos)} 条空文本微博:")
             for weibo in empty_weibos:
                 logger.warning(f"  - ID: {weibo['id']}, URL: {weibo['url']}")
-        
-        logger.info("数据已保存到 favorites.json")
     
     return all_favorites
+
+def check_duplicate(last_id: str, weibo_id: str) -> bool:
+    """检查微博是否已存在
+    
+    Args:
+        last_id: 上次爬取的微博ID
+        weibo_id: 微博ID
+    
+    Returns:
+        True 已存在，False 不存在
+    """
+     # 如果遇到已爬取的微博ID，停止爬取
+    if last_id and weibo_id == last_id:
+        logger.info(f"遇到已爬取的微博(ID: {last_id})，停止爬取")
+        return True
+    else:
+        return False
+
+def check_empty_text(weibo: Dict) -> bool:
+    """检查微博文本是否为空
+    
+    Args:
+        weibo: 微博数据
+    
+    Returns:
+        True 空文本，False 非空文本
+    """
+    if not weibo.get("text", "").strip():
+        logger.warning(f"发现空文本微博 - ID: {weibo['id']}, URL: {weibo['url']}")
+        return True
+    else:
+        return False
+
 
 def parse_weibo(data: Dict) -> Dict:
     """解析微博数据
@@ -176,7 +246,11 @@ def main():
         
         # 获取收藏数据
         favorites = crawl_favorites(cookies)
-        
+        # 保存到数据库
+        try:
+            save_weibo(favorites)
+        except Exception as e:
+            logger.error(f"保存到数据库失败: {str(e)}")
     except Exception as e:
         logger.error(f"程序执行出错: {str(e)}")
         raise

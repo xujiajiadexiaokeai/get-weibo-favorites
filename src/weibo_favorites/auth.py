@@ -112,7 +112,7 @@ def get_weibo_cookies():
         # 保存cookies到文件
         with open(config.COOKIES_FILE, 'w', encoding='utf-8') as f:
             json.dump(cookies, f, ensure_ascii=False, indent=2)
-            
+        
         logger.info("成功保存cookies")
         return cookies
         
@@ -127,9 +127,11 @@ def get_weibo_cookies():
         logger.error(traceback.format_exc())
         return None
     finally:
-        try:
-            driver.quit()
-        except Exception as e:
+        if driver:
+            try:
+                logger.info("正在关闭浏览器...")
+                driver.quit()
+            except Exception as e:
                 logger.error(f"关闭浏览器时发生错误: {str(e)}")
 
 if __name__ == '__main__':
