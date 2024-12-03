@@ -17,7 +17,9 @@ from .auth import load_cookies, create_session
 from .database import save_weibo
 
 # 设置日志记录器
-logger = setup_logger()
+logger = setup_logger(
+    "crawler",
+)
 
 def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
     """获取指定页的收藏列表
@@ -39,7 +41,8 @@ def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
         
         favorites = data.get("data", [])
         if not favorites:
-            logger.info("没有更多数据了")
+            logger.error("没有更多数据了,请检查cookies是否正确")
+            return []
         return favorites
         
     except Exception as e:
@@ -189,6 +192,16 @@ def check_empty_text(weibo: Dict) -> bool:
     else:
         return False
 
+def parse_weibo_time(time_str: str) -> str:
+    """将微博时间格式转换为标准ISO格式"""
+    try:
+        # 解析微博时间格式，例如："Sun Dec 01 12:09:53 +0800 2024"
+        dt = datetime.strptime(time_str, "%a %b %d %H:%M:%S %z %Y")
+        # 转换为ISO格式
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        logger.warning(f"Failed to parse time string: {time_str}, Error: {e}")
+        return time_str
 
 def parse_weibo(data: Dict) -> Dict:
     """解析微博数据
@@ -212,7 +225,7 @@ def parse_weibo(data: Dict) -> Dict:
         
         weibo = {
             "id": str(data.get("idstr", "")),
-            "created_at": data.get("created_at", ""),
+            "created_at": parse_weibo_time(data.get("created_at", "")),
             "url": f"https://weibo.com/{user.get('idstr', '')}/{data.get('mblogid', '')}" if user else "",
             "user_name": user.get("screen_name", ""),
             "user_id": str(user.get("idstr", "")),

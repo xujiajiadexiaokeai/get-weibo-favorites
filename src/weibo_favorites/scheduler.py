@@ -22,8 +22,6 @@ from .utils import setup_logger
 # 设置调度器日志
 scheduler_logger = setup_logger(
     "scheduler",
-    log_file=config.SCHEDULER_LOG_FILE,
-    log_level=config.LOG_LEVEL
 )
 
 def check_cookies() -> bool:
@@ -68,7 +66,7 @@ def run_task():
             return True
         else:
             scheduler_logger.warning("任务完成，但未获取到数据")
-            return False
+            return True
             
     except Exception as e:
         scheduler_logger.error(f"任务执行失败: {e}")

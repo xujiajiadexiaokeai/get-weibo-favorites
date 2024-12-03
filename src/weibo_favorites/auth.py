@@ -14,7 +14,9 @@ from . import config
 from .utils import setup_logger
 
 # 设置日志记录器
-logger = setup_logger()
+logger = setup_logger(
+    "auth",
+    )
 
 def load_cookies() -> List[Dict]:
     """从文件加载cookies

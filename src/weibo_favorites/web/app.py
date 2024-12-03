@@ -64,13 +64,10 @@ def favorites():
     # 获取分页数据
     offset = (page - 1) * per_page
     cursor.execute('''
-        SELECT * FROM weibo_favorites 
-        ORDER BY strftime('%Y-%m-%d %H:%M:%S', 
-            REPLACE(
-                REPLACE(created_at, ' +0800', ''),
-                'Sun ', ''
-            )
-        ) DESC 
+        SELECT 
+            id, created_at, url, user_name, user_id, is_long_text, text, text_html, source, links FROM weibo_favorites 
+        ORDER BY 
+            created_at DESC 
         LIMIT ? OFFSET ?
     ''', (per_page, offset))
     items = cursor.fetchall()

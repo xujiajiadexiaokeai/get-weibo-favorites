@@ -31,6 +31,6 @@ LOG_LEVEL = "INFO"
 
 # Scheduler configuration
 SCHEDULER_LOG_FILE = LOGS_DIR / "scheduler.log"
-CRAWL_INTERVAL = 3600 * 12  # 爬取间隔（秒）
+CRAWL_INTERVAL = 3600  # 爬取间隔（秒）
 MAX_RETRIES = 1  # 最大重试次数
-RETRY_DELAY = 300  # 重试间隔（秒）
+RETRY_DELAY = 30  # 重试间隔（秒）
