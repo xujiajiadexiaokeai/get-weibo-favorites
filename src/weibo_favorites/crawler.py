@@ -83,7 +83,6 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
         收藏列表
     """
     all_favorites = []
-    empty_weibos = []  # 用于存储空文本的微博
     page = 1
     
     # TODO: 测试时不更新状态或者另外保存?
@@ -112,13 +111,6 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
                 found_duplicate = check_duplicate(last_id, weibo['id'])
                 if found_duplicate:
                     break
-                
-                # 检查文本是否为空
-                if check_empty_text(weibo):
-                    empty_weibos.append({
-                        "id": weibo["id"],
-                        "url": weibo["url"]
-                    })
                 else:
                     all_favorites.append(weibo)
             
@@ -152,11 +144,6 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
             with open(config.FAVORITES_FILE, 'w', encoding='utf-8') as f:
                 json.dump(all_favorites, f, ensure_ascii=False, indent=2)
             logger.info("数据已保存到 favorites.json")
-
-        if empty_weibos:
-            logger.warning(f"发现 {len(empty_weibos)} 条空文本微博:")
-            for weibo in empty_weibos:
-                logger.warning(f"  - ID: {weibo['id']}, URL: {weibo['url']}")
     
     return all_favorites
 
@@ -173,21 +160,6 @@ def check_duplicate(last_id: str, weibo_id: str) -> bool:
      # 如果遇到已爬取的微博ID，停止爬取
     if last_id and weibo_id == last_id:
         logger.info(f"遇到已爬取的微博(ID: {last_id})，停止爬取")
-        return True
-    else:
-        return False
-
-def check_empty_text(weibo: Dict) -> bool:
-    """检查微博文本是否为空
-    
-    Args:
-        weibo: 微博数据
-    
-    Returns:
-        True 空文本，False 非空文本
-    """
-    if not weibo.get("text", "").strip():
-        logger.warning(f"发现空文本微博 - ID: {weibo['id']}, URL: {weibo['url']}")
         return True
     else:
         return False
