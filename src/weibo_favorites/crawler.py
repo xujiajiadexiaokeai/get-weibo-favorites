@@ -40,9 +40,6 @@ def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
         data = response.json()
         
         favorites = data.get("data", [])
-        if not favorites:
-            logger.error("没有更多数据了,请检查cookies是否正确")
-            return []
         return favorites
         
     except Exception as e:
@@ -99,7 +96,10 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
             
             # 获取收藏列表
             favorites = get_favorites(session, page)
-            if not favorites:
+            if not favorites and page == 1:
+                logger.error("未获取到任何收藏数据，请检查cookies是否正确")
+                break
+            elif not favorites:
                 logger.info("没有更多收藏了")
                 break
             # 检查是否遇到重复内容
