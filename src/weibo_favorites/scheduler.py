@@ -1,17 +1,7 @@
-#!/usr/bin/env python3
-"""定时任务调度器
-
-自动执行微博收藏爬取任务，支持：
-1. 定时执行爬取任务
-2. 检查 cookies 状态
-3. 错误重试
-4. 独立的日志记录
-"""
-
-import time
+"""调度器模块"""
 import logging
+import time
 from datetime import datetime
-from pathlib import Path
 
 from . import config
 from .auth import load_cookies
@@ -20,10 +10,9 @@ from .database import save_weibo
 from .run_history import RunLogger
 from .utils import LogManager
 
-"""调度器模块"""
-# 设置所有模块的日志记录器
+# 设置日志记录器
+logger = LogManager.setup_logger('scheduler')
 loggers = LogManager.setup_module_loggers()
-logger = loggers['scheduler']
 
 class Scheduler:
     def __init__(self):
