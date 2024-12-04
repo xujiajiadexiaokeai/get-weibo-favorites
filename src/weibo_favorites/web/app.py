@@ -120,12 +120,12 @@ def get_run_log(run_id):
     log_path = run_logger.get_run_log_path(run_id)
     
     if not log_path.exists():
-        return jsonify({'error': '日志文件不存在'}), 404
+        return jsonify({'success': False, 'error': '日志文件不存在'}), 404
     
     with open(log_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+        log = f.read()
     
-    return jsonify({'content': content})
+    return jsonify({'success': True, 'content': log})
 
 @app.route('/api/logs')
 def get_logs():

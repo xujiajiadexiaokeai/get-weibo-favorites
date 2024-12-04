@@ -104,7 +104,7 @@ async function viewLog(runId) {
         const data = await response.json();
         
         if (data.success) {
-            logContent.textContent = data.log;
+            logContent.textContent = data.content;
         } else {
             logContent.textContent = `Error: ${data.error}`;
         }
