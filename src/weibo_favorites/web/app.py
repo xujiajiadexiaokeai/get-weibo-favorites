@@ -1,11 +1,12 @@
 """Web application for Weibo Favorites"""
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify, request
 import sqlite3
 
 from .. import config
+from ..logging_config import RunLogger
 from ..utils import setup_logger
 
 # 设置Web应用日志
@@ -20,11 +21,35 @@ app = Flask(__name__)
 # 添加模板函数
 app.jinja_env.globals.update(max=max, min=min)
 
+# 添加模板过滤器
+@app.template_filter('datetime')
+def format_datetime(value):
+    """格式化日期时间"""
+    try:
+        dt = datetime.fromisoformat(value)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except:
+        return value
+
+@app.template_filter('duration')
+def format_duration(seconds):
+    """格式化持续时间"""
+    try:
+        duration = timedelta(seconds=float(seconds))
+        minutes, seconds = divmod(duration.seconds, 60)
+        if minutes > 0:
+            return f"{minutes}分{seconds}秒"
+        return f"{seconds}秒"
+    except:
+        return "N/A"
+
 def get_db():
     """获取数据库连接"""
     db = sqlite3.connect(config.DATABASE_FILE)
     db.row_factory = sqlite3.Row
     return db
+
+run_logger = RunLogger()
 
 @app.route('/')
 def index():
@@ -39,7 +64,7 @@ def index():
     # 读取最新的日志
     try:
         with open(config.LOG_FILE, 'r') as f:
-            logs = f.readlines()[-50:]  # 最新的50行日志
+            logs = f.readlines()[-20:]  # 最新的20行日志
     except:
         logs = ["未找到日志文件"]
     
@@ -47,6 +72,22 @@ def index():
                          crawler_state=crawler_state,
                          logs=logs,
                          current_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+@app.route('/runs')
+def runs():
+    """运行历史页面"""
+    runs = run_logger.get_all_runs()
+    return render_template("runs.html", runs=runs)
+
+@app.route('/api/runs/<run_id>/log')
+def run_log(run_id):
+    """获取特定运行的日志"""
+    try:
+        with open(run_logger.get_run_log_path(run_id), 'r') as f:
+            log_content = f.read()
+        return jsonify({"success": True, "log": log_content})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/favorites')
 def favorites():

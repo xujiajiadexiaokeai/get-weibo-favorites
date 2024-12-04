@@ -29,5 +29,5 @@ wheels/
 # Project specific
 data/*.json
 data/*.db
-logs/*.log
+logs/
 .DS_Store
