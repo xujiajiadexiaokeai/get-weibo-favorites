@@ -1,3 +1,4 @@
+"""认证模块，处理微博登录和cookie管理"""
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -11,12 +12,10 @@ from typing import List, Dict
 import requests
 
 from . import config
-from .utils import setup_logger
+from .utils import LogManager
 
 # 设置日志记录器
-logger = setup_logger(
-    "auth",
-    )
+logger = LogManager.setup_logger('auth')
 
 def load_cookies() -> List[Dict]:
     """从文件加载cookies

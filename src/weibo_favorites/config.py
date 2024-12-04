@@ -25,12 +25,11 @@ BASE_URL = "https://weibo.com/ajax/favorites/all_fav"
 REQUEST_DELAY = 2  # seconds between requests
 
 # Logging configuration
-LOG_FILE = LOGS_DIR / "weibo_favorites.log"
+LOG_FILE = LOGS_DIR / "app.log"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 LOG_LEVEL = "INFO"
 
 # Scheduler configuration
-SCHEDULER_LOG_FILE = LOGS_DIR / "scheduler.log"
 CRAWL_INTERVAL = 3600  # 爬取间隔（秒）
 MAX_RETRIES = 1  # 最大重试次数
 RETRY_DELAY = 30  # 重试间隔（秒）

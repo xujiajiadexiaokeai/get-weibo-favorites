@@ -17,32 +17,12 @@ from . import config
 from .auth import load_cookies
 from .crawler import crawl_favorites
 from .database import save_weibo
-from .logging_config import RunLogger
+from .run_history import RunLogger
+from .utils import LogManager
 
 """调度器模块"""
-def setup_module_loggers():
-    """设置所有模块的日志记录器"""
-    loggers = {}
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # 创建并配置各个模块的logger
-    for name in ['scheduler', 'crawler', 'database', 'auth']:
-        logger = logging.getLogger(name)
-        logger.setLevel(logging.INFO)
-        
-        # 添加控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
-        
-        loggers[name] = logger
-    
-    return loggers
-
 # 设置所有模块的日志记录器
-loggers = setup_module_loggers()
+loggers = LogManager.setup_module_loggers()
 logger = loggers['scheduler']
 
 class Scheduler:
@@ -50,40 +30,6 @@ class Scheduler:
         self.interval = config.CRAWL_INTERVAL
         self.running = False
         self.run_logger = RunLogger()
-        self.file_handler = None
-        self.current_run_id = None
-    
-    def _setup_run_logging(self, run_id: str):
-        """设置运行日志"""
-        # 如果已有日志处理器，先移除
-        self._cleanup_run_logging()
-        
-        # 设置新的日志文件
-        log_path = self.run_logger.get_run_log_path(run_id)
-        self.file_handler = logging.FileHandler(log_path)
-        self.file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        ))
-        
-        # 添加文件处理器到所有相关的logger
-        for name, log in loggers.items():
-            log.addHandler(self.file_handler)
-        
-        self.current_run_id = run_id
-        logger.info(f"开始新的运行: {run_id}")
-    
-    def _cleanup_run_logging(self):
-        """清理运行日志处理器"""
-        if self.file_handler:
-            for log in loggers.values():
-                if self.file_handler in log.handlers:
-                    log.removeHandler(self.file_handler)
-            self.file_handler.close()
-            self.file_handler = None
-            
-            if self.current_run_id:
-                logger.info(f"结束运行: {self.current_run_id}")
-            self.current_run_id = None
     
     def start(self):
         """启动调度器"""
@@ -93,7 +39,7 @@ class Scheduler:
         while self.running:
             start_time = time.time()
             run_id = self.run_logger.start_new_run()
-            self._setup_run_logging(run_id)
+            LogManager.setup_run_logging(run_id)
             
             try:
                 logger.info(f"开始新的任务周期: {datetime.now().isoformat()}")
@@ -158,13 +104,13 @@ class Scheduler:
                 )
                 time.sleep(config.RETRY_DELAY)
             finally:
-                self._cleanup_run_logging()
+                LogManager.cleanup_run_logging()
     
     def stop(self):
         """停止调度器"""
         self.running = False
         logger.info("收到终止信号，调度器停止运行")
-        self._cleanup_run_logging()
+        LogManager.cleanup_run_logging()
     
     def check_cookies(self) -> bool:
         """检查 cookies 是否可用

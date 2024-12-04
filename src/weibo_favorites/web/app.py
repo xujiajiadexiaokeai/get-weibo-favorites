@@ -1,27 +1,23 @@
-"""Web application for Weibo Favorites"""
+"""Web应用模块，用于显示爬虫状态和日志"""
 
 import os
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify, request
+from pathlib import Path
 import sqlite3
 
+from flask import Flask, render_template, jsonify, request
 from .. import config
-from ..logging_config import RunLogger
-from ..utils import setup_logger
-
-# 设置Web应用日志
-web_logger = setup_logger(
-    "web",
-    log_file=config.LOGS_DIR / "web.log",
-    log_level=config.LOG_LEVEL
-)
+from ..run_history import RunLogger
+from ..utils import LogManager
 
 app = Flask(__name__)
+
+# 设置Web应用日志
+logger = LogManager.setup_logger('web')
 
 # 添加模板函数
 app.jinja_env.globals.update(max=max, min=min)
 
-# 添加模板过滤器
 @app.template_filter('datetime')
 def format_datetime(value):
     """格式化日期时间"""
@@ -49,8 +45,6 @@ def get_db():
     db.row_factory = sqlite3.Row
     return db
 
-run_logger = RunLogger()
-
 @app.route('/')
 def index():
     """首页 - 显示爬虫状态和日志"""
@@ -72,22 +66,6 @@ def index():
                          crawler_state=crawler_state,
                          logs=logs,
                          current_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-@app.route('/runs')
-def runs():
-    """运行历史页面"""
-    runs = run_logger.get_all_runs()
-    return render_template("runs.html", runs=runs)
-
-@app.route('/api/runs/<run_id>/log')
-def run_log(run_id):
-    """获取特定运行的日志"""
-    try:
-        with open(run_logger.get_run_log_path(run_id), 'r') as f:
-            log_content = f.read()
-        return jsonify({"success": True, "log": log_content})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/favorites')
 def favorites():
@@ -121,6 +99,34 @@ def favorites():
                          total_pages=total_pages,
                          total=total)
 
+@app.route('/runs')
+def runs():
+    """运行历史页面"""
+    run_logger = RunLogger()
+    runs = run_logger.get_all_runs()
+    return render_template('runs.html', runs=runs)
+
+@app.route('/api/runs/<run_id>/log')
+def get_run_log(run_id):
+    """获取运行日志
+    
+    Args:
+        run_id: 运行ID
+        
+    Returns:
+        运行日志内容
+    """
+    run_logger = RunLogger()
+    log_path = run_logger.get_run_log_path(run_id)
+    
+    if not log_path.exists():
+        return jsonify({'error': '日志文件不存在'}), 404
+    
+    with open(log_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    return jsonify({'content': content})
+
 @app.route('/api/logs')
 def get_logs():
     """获取最新日志的API"""
@@ -139,7 +145,7 @@ def run_web():
     # 确保数据库文件所在目录存在
     config.DATABASE_FILE.parent.mkdir(parents=True, exist_ok=True)
     
-    web_logger.info("启动Web应用")
+    logger.info("启动Web应用")
     app.run(host='0.0.0.0', port=5001, debug=True)
 
 if __name__ == '__main__':

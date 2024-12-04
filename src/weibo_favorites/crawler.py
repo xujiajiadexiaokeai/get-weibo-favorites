@@ -1,25 +1,21 @@
-# weibo_crawler.py
-
+"""爬虫模块，负责爬取和解析微博收藏"""
 import json
-import logging
 from datetime import datetime
-from typing import Dict, List, Optional
 from pathlib import Path
 from time import sleep
+from typing import Dict, List, Optional
 import traceback
 
 import requests
 from requests.exceptions import RequestException
 
 from . import config
-from .utils import setup_logger
+from .utils import LogManager
 from .auth import load_cookies, create_session
 from .database import save_weibo
 
 # 设置日志记录器
-logger = setup_logger(
-    "crawler",
-)
+logger = LogManager.setup_logger('crawler')
 
 def get_favorites(session: requests.Session, page: int = 1) -> List[Dict]:
     """获取指定页的收藏列表
