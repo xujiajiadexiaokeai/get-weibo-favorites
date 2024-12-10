@@ -10,7 +10,7 @@ I collected too many posts in Weibo, which was inconvenient to manage. After a p
 
 ## Installation
 
-To install the Weibo Favorites Crawler, follow these steps:
+To install the Weibo Favorites Backup Tool, follow these steps:
 
 1. Clone the repository:
 ```bash
@@ -25,17 +25,17 @@ pip install -e .
 
 ## Usage
 
-The crawler consists of two main scripts:
+The tool has two main components:
 
-1. `weibo_auth.py`: Used to obtain Weibo cookies through browser automation
-2. `weibo_crawler.py`: The main script for crawling your Weibo favorites
+1. A crawler for backing up your Weibo favorites
+2. A web interface for managing and viewing your backed-up favorites
 
 ### Getting Cookies
 
 First, you need to get your Weibo cookies:
 
 ```bash
-python -m weibo_favorites.auth
+python -m weibo_favorites.crawler.auth
 ```
 
 This will:
@@ -44,28 +44,31 @@ This will:
 3. Wait for you to manually log in
 4. Save your cookies to `data/weibo_cookies.json` after successful login
 
-### Crawling Favorites
+### Scheduling Crawl Favorites
 
-After obtaining the cookies, you can start crawling your favorites:
+After obtaining the cookies, you can initiate the scheduling process to back up your favorites:
 
 ```bash
-python -m weibo_favorites.crawler
+python -m weibo_favorites.scheduler
 ```
 
-The script will:
+This will:
 1. Load cookies from `data/weibo_cookies.json`
-2. Fetch your Weibo favorites page by page
-3. Save the results to `data/favorites.json`
+2. Periodically fetch your Weibo favorites page by page
+3. Save the results to `data/weibo_favorites.db`
 
-### Testing
-
-To test if the crawler is working correctly:
+### Running the Web Interface
 
 ```bash
-python -m pytest tests/
+python -m weibo_favorites.web.app
 ```
 
-This will attempt to fetch the first page of your favorites and save them to `data/test_favorites.json`.
+The web interface will be available at `http://localhost:5001`
+
+The interface will display:
+1. Crawler running status
+2. Crawler running logs
+3. Backed-up favorites
 
 ## Configuration
 
