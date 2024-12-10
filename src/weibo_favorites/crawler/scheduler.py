@@ -3,12 +3,12 @@ import logging
 import time
 from datetime import datetime
 
-from . import config
+from .. import config
 from .auth import load_cookies
 from .crawler import crawl_favorites
-from .database import save_weibo
+from ..database import save_weibo
 from .run_history import RunLogger
-from .utils import LogManager
+from ..utils import LogManager
 
 # 设置日志记录器
 logger = LogManager.setup_logger('scheduler')

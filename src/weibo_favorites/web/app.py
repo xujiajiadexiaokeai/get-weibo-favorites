@@ -4,11 +4,11 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 import sqlite3
-
 from flask import Flask, render_template, jsonify, request
+
 from .. import config
-from ..run_history import RunLogger
 from ..utils import LogManager
+from ..crawler.run_history import RunLogger
 
 app = Flask(__name__)
 

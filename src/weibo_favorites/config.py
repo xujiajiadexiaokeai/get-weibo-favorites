@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 # Data directory
 DATA_DIR = PROJECT_ROOT / "data"
 LOGS_DIR = PROJECT_ROOT / "logs"
+RUNS_DIR = LOGS_DIR / "runs"
 
 # Ensure directories exist
 DATA_DIR.mkdir(exist_ok=True)
@@ -19,6 +20,7 @@ COOKIES_FILE = DATA_DIR / "weibo_cookies.json"
 FAVORITES_FILE = DATA_DIR / "favorites.json"
 DATABASE_FILE = DATA_DIR / "weibo_favorites.db"
 CRAWLER_STATE_FILE = DATA_DIR / "crawler_state.json"  # 新增：爬虫状态文件
+HISTORY_FILE = LOGS_DIR / "history.json"  # 新增：爬虫历史记录文件
 
 # Weibo API configuration
 BASE_URL = "https://weibo.com/ajax/favorites/all_fav"

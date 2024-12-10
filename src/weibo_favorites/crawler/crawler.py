@@ -9,10 +9,10 @@ import traceback
 import requests
 from requests.exceptions import RequestException
 
-from . import config
-from .utils import LogManager
+from .. import config
+from ..utils import LogManager
 from .auth import load_cookies, create_session
-from .database import save_weibo
+from ..database import save_weibo
 
 # 设置日志记录器
 logger = LogManager.setup_logger('crawler')

@@ -7,11 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict
 
+from .. import config
+
 class RunLogger:
-    def __init__(self, base_dir: str = "logs"):
-        self.base_dir = Path(base_dir)
-        self.runs_dir = self.base_dir / "runs"
-        self.history_file = self.base_dir / "history.json"
+    def __init__(self):
+        self.base_dir = config.LOGS_DIR
+        self.runs_dir = config.RUNS_DIR
+        self.history_file = config.HISTORY_FILE
         
         # 创建必要的目录
         self.base_dir.mkdir(parents=True, exist_ok=True)

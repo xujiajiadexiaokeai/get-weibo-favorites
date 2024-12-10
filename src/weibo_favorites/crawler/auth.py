@@ -11,8 +11,8 @@ import traceback
 from typing import List, Dict
 import requests
 
-from . import config
-from .utils import LogManager
+from .. import config
+from ..utils import LogManager
 
 # 设置日志记录器
 logger = LogManager.setup_logger('auth')
