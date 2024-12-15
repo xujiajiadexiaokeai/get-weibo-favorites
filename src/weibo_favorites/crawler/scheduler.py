@@ -1,7 +1,6 @@
 """调度器模块"""
-import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .. import config
 from .auth import load_cookies
@@ -19,6 +18,7 @@ class Scheduler:
         self.interval = config.CRAWL_INTERVAL
         self.running = False
         self.run_logger = RunLogger()
+        self.next_run_time = None
     
     def start(self):
         """启动调度器"""
@@ -78,6 +78,7 @@ class Scheduler:
                 logger.info(f"本次任务耗时: {duration:.2f} 秒")
                 
                 # 等待下一次执行
+                self.next_run_time = datetime.now() + timedelta(seconds=self.interval)
                 wait_time = self.interval - duration
                 if wait_time > 0:
                     logger.info(f"等待 {wait_time:.2f} 秒后执行下一次任务")
@@ -100,6 +101,17 @@ class Scheduler:
         self.running = False
         logger.info("收到终止信号，调度器停止运行")
         LogManager.cleanup_run_logging()
+    
+    def get_status(self):
+        """获取调度器状态"""
+        current_time = datetime.now()
+        
+        return {
+            "running": self.running,
+            "current_time": current_time.isoformat(),
+            "next_run": self.next_run_time.isoformat() if self.running else None,
+            "interval": self.interval
+        }
     
     def check_cookies(self) -> bool:
         """检查 cookies 是否可用

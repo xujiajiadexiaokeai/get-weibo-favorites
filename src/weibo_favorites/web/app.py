@@ -9,8 +9,10 @@ from flask import Flask, render_template, jsonify, request
 from .. import config
 from ..utils import LogManager
 from ..crawler.run_history import RunLogger
+from ..crawler.scheduler import Scheduler
 
 app = Flask(__name__)
+scheduler = Scheduler()
 
 # 设置Web应用日志
 logger = LogManager.setup_logger('web')
@@ -136,6 +138,23 @@ def get_logs():
         return jsonify({'logs': logs})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scheduler/status')
+def get_scheduler_status():
+    """获取调度器状态"""
+    return jsonify(scheduler.get_status())
+
+@app.route('/api/scheduler/control', methods=['POST'])
+def control_scheduler():
+    """控制调度器"""
+    action = request.json.get('action')
+    if action == 'start':
+        scheduler.start()
+        return jsonify({"status": "started"})
+    elif action == 'stop':
+        scheduler.stop()
+        return jsonify({"status": "stopped"})
+    return jsonify({"error": "Invalid action"}), 400
 
 def run_web():
     """运行Web应用"""

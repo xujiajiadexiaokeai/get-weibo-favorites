@@ -4,7 +4,26 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-12">
+    <div class="col-md-6">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>调度器状态</h2>
+            <button id="scheduler-control" class="btn btn-primary" onclick="toggleScheduler()">
+                启动调度器
+            </button>
+        </div>
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">当前状态</h5>
+                <p class="card-text">
+                    <strong>更新时间：</strong><span id="current-time">{{ current_time }}</span><br>
+                    <strong>运行状态：</strong><span id="running-status">停止</span><br>
+                    <strong>下次运行：</strong><span id="next-run">-</span><br>
+                    <strong>运行间隔：</strong><span id="interval">-</span>分钟
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
         <h2>爬虫状态</h2>
         <div class="card mb-4">
             <div class="card-body">
@@ -46,5 +65,43 @@ function refreshLogs() {
 
 // 每30秒刷新一次
 setInterval(refreshLogs, 30000);
+
+let schedulerRunning = false;
+
+function updateSchedulerStatus() {
+    fetch('/api/scheduler/status')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('current-time').textContent = new Date(data.current_time).toLocaleString();
+            document.getElementById('running-status').textContent = data.running ? '运行中' : '停止';
+            document.getElementById('next-run').textContent = data.next_run ? new Date(data.next_run).toLocaleString() : '-';
+            document.getElementById('interval').textContent = Math.floor(data.interval / 60);
+            
+            schedulerRunning = data.running;
+            const btn = document.getElementById('scheduler-control');
+            btn.textContent = schedulerRunning ? '停止调度器' : '启动调度器';
+            btn.classList.toggle('btn-danger', schedulerRunning);
+            btn.classList.toggle('btn-primary', !schedulerRunning);
+        });
+}
+
+function toggleScheduler() {
+    const action = schedulerRunning ? 'stop' : 'start';
+    fetch('/api/scheduler/control', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: action })
+    })
+    .then(response => response.json())
+    .then(data => {
+        updateSchedulerStatus();
+    });
+}
+
+// 定期更新状态
+updateSchedulerStatus();
+setInterval(updateSchedulerStatus, 5000);
 </script>
 {% endblock %}
