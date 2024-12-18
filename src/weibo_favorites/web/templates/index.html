@@ -3,47 +3,50 @@
 {% block title %}爬虫状态 - 微博收藏管理{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-6">
-        <div class="d-flex justify-content-between align-items-center">
-            <h2>调度器状态</h2>
-            <button id="scheduler-control" class="btn btn-primary" onclick="toggleScheduler()">
-                启动调度器
+<div class="space-y-6">
+    <!-- 调度器状态 -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold">调度器状态</h2>
+            <button id="controlButton" class="px-3 py-1 rounded-md text-white text-sm font-medium transition-colors">
+                查询中
             </button>
         </div>
-        <div class="card mb-4">
-            <div class="card-body">
-                <h5 class="card-title">当前状态</h5>
-                <p class="card-text">
-                    <strong>更新时间：</strong><span id="current-time">{{ current_time }}</span><br>
-                    <strong>运行状态：</strong><span id="running-status">停止</span><br>
-                    <strong>下次运行：</strong><span id="next-run">-</span><br>
-                    <strong>运行间隔：</strong><span id="interval">-</span>分钟
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <p class="text-gray-600">状态: 
+                    <span id="schedulerStatus" class="font-medium">
+                        <span class="text-gray-600">-</span>
+                    </span>
                 </p>
+                <p class="text-gray-600">运行间隔: <span id="runInterval" class="font-medium">{{ run_interval }}</span>分钟</p>
+                <p class="text-gray-600">下次运行时间: <span id="nextRunTime" class="font-medium">{{ next_run_time }}</span></p>
+                <p class="text-gray-600">更新时间: <span id="lastUpdateTime" class="font-medium">{{ last_update_time }}</span></p>
             </div>
         </div>
     </div>
-    <div class="col-md-6">
-        <h2>爬虫状态</h2>
-        <div class="card mb-4">
-            <div class="card-body">
-                <h5 class="card-title">当前状态</h5>
-                <p class="card-text">
-                    <strong>更新时间：</strong>{{ current_time }}<br>
-                    <strong>爬虫状态：</strong><pre>{{ crawler_state }}</pre>
-                </p>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row">
-    <div class="col-md-12">
-        <h2>最新日志</h2>
-        <div class="log-container" id="logContainer">
-            {% for log in logs %}
-            <div class="log-line">{{ log }}</div>
-            {% endfor %}
+    <!-- 爬虫状态 -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold mb-4">爬虫状态</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <p class="text-gray-600"><pre id="crawler-state" class="font-medium">{{ crawler_state }}</pre></p>
+                <p class="text-gray-600">更新时间: <span id="current-time" class="font-medium">{{ current_time }}</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志查看器 -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold">运行日志</h2>
+            <button onclick="refreshLogs()" class="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors">
+                刷新
+            </button>
+        </div>
+        <div id="logViewer" class="font-mono bg-gray-50 p-4 rounded-md h-96 overflow-y-auto">
+            <div id="logContent" class="whitespace-pre-wrap text-sm"></div>
         </div>
     </div>
 </div>
@@ -51,42 +54,65 @@
 
 {% block scripts %}
 <script>
-// 自动刷新日志
 function refreshLogs() {
     fetch('/api/logs')
         .then(response => response.json())
         .then(data => {
-            const container = document.getElementById('logContainer');
-            container.innerHTML = data.logs.map(log => `<div class="log-line">${log}</div>`).join('');
-            container.scrollTop = container.scrollHeight;
+            if (data.logs) {
+                // 解析每一行日志，处理 Unicode 转义序列并添加颜色
+                const logHtml = data.logs
+                    .map(log => {
+                        const logText = JSON.parse(`"${log.trim()}"`) || '';
+                        // 根据日志级别设置颜色
+                        if (logText.includes('ERROR')) {
+                            return `<div class="text-red-600">${logText}</div>`;
+                        } else if (logText.includes('WARNING')) {
+                            return `<div class="text-yellow-600">${logText}</div>`;
+                        } else {
+                            return `<div class="text-gray-600">${logText}</div>`;
+                        }
+                    })
+                    .join('');
+                
+                document.getElementById('logContent').innerHTML = logHtml;  // 使用 innerHTML 而不是 textContent
+                const logViewer = document.getElementById('logViewer');
+                logViewer.scrollTop = logViewer.scrollHeight;
+            }
         })
-        .catch(console.error);
+        .catch(error => {
+            console.error('获取日志失败:', error);
+        });
 }
-
-// 每30秒刷新一次
-setInterval(refreshLogs, 30000);
-
-let schedulerRunning = false;
 
 function updateSchedulerStatus() {
     fetch('/api/scheduler/status')
         .then(response => response.json())
         .then(data => {
-            document.getElementById('current-time').textContent = new Date(data.current_time).toLocaleString();
-            document.getElementById('running-status').textContent = data.running ? '运行中' : '停止';
-            document.getElementById('next-run').textContent = data.next_run ? new Date(data.next_run).toLocaleString() : '-';
-            document.getElementById('interval').textContent = Math.floor(data.interval / 60);
+            const statusSpan = document.getElementById('schedulerStatus');
+            const controlButton = document.getElementById('controlButton');
+            const nextRunTime = document.getElementById('nextRunTime');
+            const runInterval = document.getElementById('runInterval');
+            const lastUpdateTime = document.getElementById('lastUpdateTime');
             
-            schedulerRunning = data.running;
-            const btn = document.getElementById('scheduler-control');
-            btn.textContent = schedulerRunning ? '停止调度器' : '启动调度器';
-            btn.classList.toggle('btn-danger', schedulerRunning);
-            btn.classList.toggle('btn-primary', !schedulerRunning);
+            if (data.running) {
+                statusSpan.innerHTML = '<span class="text-green-600">运行中</span>';
+                controlButton.textContent = '停止调度器';
+                controlButton.className = 'px-3 py-1 rounded-md text-white text-sm font-medium bg-red-600 hover:bg-red-700 transition-colors';
+            } else {
+                statusSpan.innerHTML = '<span class="text-red-600">已停止</span>';
+                controlButton.textContent = '启动调度器';
+                controlButton.className = 'px-3 py-1 rounded-md text-white text-sm font-medium bg-green-600 hover:bg-green-700 transition-colors';
+            }
+            
+            nextRunTime.textContent = data.next_run ? new Date(data.next_run).toLocaleString() : '-';
+            runInterval.textContent = data.interval ? Math.floor(data.interval / 60 ) : '未设置';
+            lastUpdateTime.textContent = new Date().toLocaleString();
         });
 }
 
-function toggleScheduler() {
-    const action = schedulerRunning ? 'stop' : 'start';
+document.getElementById('controlButton').addEventListener('click', function() {
+    const action = this.textContent.trim() === '启动调度器' ? 'start' : 'stop';
+    
     fetch('/api/scheduler/control', {
         method: 'POST',
         headers: {
@@ -98,10 +124,12 @@ function toggleScheduler() {
     .then(data => {
         updateSchedulerStatus();
     });
-}
+});
 
-// 定期更新状态
+// 初始加载
+refreshLogs();
 updateSchedulerStatus();
-setInterval(updateSchedulerStatus, 5000);
+setInterval(refreshLogs, 5000);  // 每5秒刷新一次日志
+setInterval(updateSchedulerStatus, 5000);  // 每5秒更新一次状态
 </script>
 {% endblock %}

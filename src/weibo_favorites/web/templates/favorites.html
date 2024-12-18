@@ -3,52 +3,55 @@
 {% block title %}收藏列表 - 微博收藏管理{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
-        <h2>收藏列表 <small class="text-muted">共 {{ total }} 条</small></h2>
+<div class="space-y-6">
+    <div class="bg-white shadow rounded-lg p-6">
+        <h1 class="text-2xl font-bold mb-6">收藏列表 <small class="text-muted">共 {{ total }} 条</small></h1>
         
         {% for item in items %}
-        <div class="weibo-card">
-            <div class="weibo-content">
-                {{ item.text_html|safe }}
-            </div>
-            <div class="weibo-meta mt-2">
-                <span class="me-3">
-                    <i class="bi bi-person"></i> {{ item.user_name }}
-                </span>
-                <span class="me-3">
-                    <i class="bi bi-clock"></i> {{ item.created_at }}
-                </span>
-                <span>
-                    <i class="bi bi-link-45deg"></i>
-                    <a href="{{ item.url }}" target="_blank">原文链接</a>
-                </span>
+        <div class="border border-gray-200 rounded-lg p-4 mb-4 hover:shadow-md transition-shadow">
+            <div class="space-y-2">
+                <!-- 微博内容 -->
+                <div class="text-gray-800">{{ item.text_html|safe }}</div>
+                
+                <!-- 微博元数据 -->
+                <div class="flex items-center space-x-4 text-sm text-gray-500">
+                    <span>
+                        <i class="bi bi-person"></i> {{ item.user_name }}
+                    </span>
+                    <span>
+                        <i class="bi bi-clock"></i> {{ item.created_at }}
+                    </span>
+                    <span>
+                        <i class="bi bi-link-45deg"></i>
+                        <a href="{{ item.url }}" target="_blank">原文链接</a>
+                    </span>
+                </div>
             </div>
         </div>
         {% endfor %}
 
         {% if total_pages > 1 %}
-        <nav>
-            <ul class="pagination">
+        <div class="flex justify-center mt-6">
+            <nav class="inline-flex rounded-md shadow">
                 {% if page > 1 %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('favorites', page=page-1) }}">&laquo; 上一页</a>
-                </li>
+                <a href="{{ url_for('favorites', page=page-1) }}" 
+                   class="px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    上一页
+                </a>
                 {% endif %}
-
-                {% for p in range(max(1, page-2), min(total_pages+1, page+3)) %}
-                <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('favorites', page=p) }}">{{ p }}</a>
-                </li>
-                {% endfor %}
-
+                
+                <span class="px-3 py-2 border-t border-b border-gray-300 bg-white text-sm font-medium text-gray-700">
+                    第 {{ page }} 页，共 {{ total_pages }} 页
+                </span>
+                
                 {% if page < total_pages %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('favorites', page=page+1) }}">下一页 &raquo;</a>
-                </li>
+                <a href="{{ url_for('favorites', page=page+1) }}"
+                   class="px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    下一页
+                </a>
                 {% endif %}
-            </ul>
-        </nav>
+            </nav>
+        </div>
         {% endif %}
     </div>
 </div>
