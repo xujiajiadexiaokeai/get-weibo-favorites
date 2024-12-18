@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import sqlite3
 from flask import Flask, render_template, jsonify, request
+import subprocess
 
 from .. import config
 from ..utils import LogManager
@@ -149,7 +150,12 @@ def control_scheduler():
     """控制调度器"""
     action = request.json.get('action')
     if action == 'start':
-        scheduler.start()
+        if not scheduler.is_running():
+            # 启动独立的调度器进程
+            subprocess.Popen(
+                ['python', '-m', 'weibo_favorites.crawler.scheduler'],
+                cwd=str(Path(config.PROJECT_ROOT))
+            )
         return jsonify({"status": "started"})
     elif action == 'stop':
         scheduler.stop()

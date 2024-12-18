@@ -35,3 +35,5 @@ LOG_LEVEL = "INFO"
 CRAWL_INTERVAL = 3600  # 爬取间隔（秒）
 MAX_RETRIES = 1  # 最大重试次数
 RETRY_DELAY = 30  # 重试间隔（秒）
+SCHEDULER_PID_FILE = DATA_DIR / "scheduler.pid"
+SCHEDULER_STATUS_FILE = DATA_DIR / "scheduler_status.json"
