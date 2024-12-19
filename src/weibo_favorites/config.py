@@ -1,6 +1,5 @@
 """Configuration module for the Weibo Favorites Crawler."""
 
-import os
 from pathlib import Path
 
 # Project root directory
@@ -37,3 +36,8 @@ MAX_RETRIES = 1  # 最大重试次数
 RETRY_DELAY = 30  # 重试间隔（秒）
 SCHEDULER_PID_FILE = DATA_DIR / "scheduler.pid"
 SCHEDULER_STATUS_FILE = DATA_DIR / "scheduler_status.json"
+
+# Redis配置
+REDIS_HOST = 'localhost'
+REDIS_PORT = 6379
+REDIS_DB = 0

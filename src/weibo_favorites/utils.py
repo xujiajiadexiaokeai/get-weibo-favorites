@@ -80,7 +80,7 @@ class LogManager:
             包含所有模块日志记录器的字典
         """
         # 创建并配置各个模块的logger
-        for name in ['scheduler', 'crawler', 'auth']:
+        for name in ['scheduler', 'crawler', 'auth', 'database', 'queue', 'task', 'web']:
             if name not in cls._loggers:
                 cls.setup_logger(name)
         
