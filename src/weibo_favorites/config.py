@@ -1,6 +1,5 @@
 """Configuration module for the Weibo Favorites Crawler."""
 
-import os
 from pathlib import Path
 
 # Project root directory
@@ -24,6 +23,7 @@ HISTORY_FILE = LOGS_DIR / "history.json"  # 新增：爬虫历史记录文件
 
 # Weibo API configuration
 BASE_URL = "https://weibo.com/ajax/favorites/all_fav"
+LONG_TEXT_CONTENT_URL = "https://weibo.com/ajax/statuses/longtext?id="
 REQUEST_DELAY = 2  # seconds between requests
 
 # Logging configuration
@@ -37,3 +37,8 @@ MAX_RETRIES = 1  # 最大重试次数
 RETRY_DELAY = 30  # 重试间隔（秒）
 SCHEDULER_PID_FILE = DATA_DIR / "scheduler.pid"
 SCHEDULER_STATUS_FILE = DATA_DIR / "scheduler_status.json"
+
+# Redis配置
+REDIS_HOST = 'localhost'
+REDIS_PORT = 6379
+REDIS_DB = 0
