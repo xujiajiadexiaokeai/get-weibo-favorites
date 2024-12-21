@@ -23,6 +23,7 @@ HISTORY_FILE = LOGS_DIR / "history.json"  # 新增：爬虫历史记录文件
 
 # Weibo API configuration
 BASE_URL = "https://weibo.com/ajax/favorites/all_fav"
+LONG_TEXT_CONTENT_URL = "https://weibo.com/ajax/statuses/longtext?id="
 REQUEST_DELAY = 2  # seconds between requests
 
 # Logging configuration

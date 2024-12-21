@@ -208,6 +208,7 @@ def parse_weibo(data: Dict) -> Dict:
         
         weibo = {
             "id": str(data.get("idstr", "")),
+            "mblogid": str(data.get("mblogid", "")),
             "created_at": parse_weibo_time(data.get("created_at", "")),
             "url": f"https://weibo.com/{user.get('idstr', '')}/{data.get('mblogid', '')}" if user else "",
             "user_name": user.get("screen_name", ""),
@@ -215,6 +216,7 @@ def parse_weibo(data: Dict) -> Dict:
             "is_long_text": data.get("isLongText", False),
             "text": data.get("text_raw", ""),  # 使用 text_raw 而不是 text
             "text_html": data.get("text", ""),  # HTML 格式的文本
+            "long_text": "", # 需要后续从其他接口获取
             "source": data.get("source", ""),
             "links": links,
             "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

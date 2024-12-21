@@ -6,7 +6,7 @@ from datetime import datetime
 from redis import Redis
 from rq import Queue
 
-from weibo_favorites.crawler.tasks import fetch_full_content
+from weibo_favorites.crawler.tasks import fetch_long_text
 from weibo_favorites.utils import LogManager
 from .. import config
 
@@ -41,7 +41,7 @@ class LongTextQueue:
         try:
             task_data = {
                 'weibo_id': weibo_data['id'],
-                'url': weibo_data['url'],
+                'url': config.LONG_TEXT_CONTENT_URL + weibo_data['mblogid'],
                 'retry_count': 0,
                 'status': 'pending',
                 'created_at': datetime.now().isoformat()
@@ -49,7 +49,7 @@ class LongTextQueue:
             
             # 将任务加入队列
             job = self.queue.enqueue(
-                fetch_full_content,
+                fetch_long_text,
                 task_data,
                 job_timeout='10m'  # 设置任务超时时间为10分钟
             )

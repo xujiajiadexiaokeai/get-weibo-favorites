@@ -1,6 +1,6 @@
 import pytest
 from weibo_favorites.crawler.queue_manager import LongTextQueue
-from weibo_favorites.crawler.tasks import fetch_full_content
+from weibo_favorites.crawler.tasks import fetch_long_text
 
 @pytest.fixture
 def queue_manager():
@@ -16,8 +16,8 @@ def test_queue_initialization(queue_manager):
 def test_add_task(queue_manager):
     """测试添加任务到队列"""
     test_weibo = {
-        "weibo_id": "5106743085896213",
-        "url": "https://m.weibo.cn/status/P2PpWoJSd",
+        "weibo_id": "5113072119974206",
+        "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
         "is_long_text": True
     }
     
@@ -40,7 +40,7 @@ def test_execute_task():
         "is_long_text": True
     }
     
-    result = fetch_full_content(test_task)
+    result = fetch_long_text(test_task)
     assert isinstance(result, dict)
     assert 'success' in result
     assert 'weibo_id' in result

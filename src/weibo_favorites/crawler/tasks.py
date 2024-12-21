@@ -13,7 +13,7 @@ from .auth import load_cookies
 
 logger = LogManager.setup_logger('task')
 
-def extract_full_text(data):
+def extract_long_text(data):
     logger.info(f"提取到的数据：{data.get('data')}")
     longTextContent = data.get("data").get("longTextContent")
     if longTextContent:
@@ -21,7 +21,7 @@ def extract_full_text(data):
     else:
         return None
 
-def fetch_full_content(task_data):
+def fetch_long_text(task_data):
     """获取微博长文本的完整内容
     
     Args:
@@ -61,8 +61,8 @@ def fetch_full_content(task_data):
         response.raise_for_status()
         data = response.json()
         # # 解析响应内容
-        full_text = extract_full_text(data)
-        if not full_text:
+        long_text = extract_long_text(data)
+        if not long_text:
             logger.warning(f"未能从响应中提取到完整内容: {weibo_id}")
             return {
                 'success': False,
@@ -72,22 +72,22 @@ def fetch_full_content(task_data):
         
         # 更新数据库中的内容
         update_data = {
-            'text': full_text,
-            'text_length': len(full_text),
+            'long_text': long_text,
+            'text_length': len(long_text),
             'crawled': True,
             'crawl_status': 'completed',
             'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
         # update_weibo_content(weibo_id, update_data)
-        with open(config.DATA_DIR / "full_text.json", 'w', encoding='utf-8') as f:
+        with open(config.DATA_DIR / "long_text.json", 'w', encoding='utf-8') as f:
                 json.dump(update_data, f, ensure_ascii=False, indent=2)
-        logger.info("数据已保存到 full_text.json")
+        logger.info("数据已保存到 long_text.json")
         logger.info(f"成功获取并更新微博完整内容: {weibo_id}")
         return {
             'success': True,
             'weibo_id': weibo_id,
-            'content': full_text,
+            'content': long_text,
             'processed_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
