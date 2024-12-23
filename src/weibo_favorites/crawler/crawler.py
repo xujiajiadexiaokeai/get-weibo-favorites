@@ -64,11 +64,12 @@ def save_crawler_state(state: dict):
     with open(config.CRAWLER_STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
-def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
+def crawl_favorites(cookies: List[Dict], queue_manager, page_number: int = 0) -> List[Dict]:
     """爬取微博收藏
     
     Args:
         cookies: cookies列表
+        queue_manager: 队列管理器
         page_number: 要爬取的页数，0表示爬取所有页或直到重复内容为止
         
     Returns:
@@ -81,9 +82,8 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
     state = load_crawler_state()
     last_id = state.get("last_id")
     
-    # 初始化session和队列管理器
+    # 初始化session
     session = create_session(cookies)
-    queue_manager = LongTextQueue()
 
     try:
         while True:
@@ -243,7 +243,7 @@ def main():
             return
         
         # 获取收藏数据
-        favorites = crawl_favorites(cookies)
+        favorites = crawl_favorites(cookies, LongTextQueue())
         # 保存到数据库
         try:
             save_weibo(favorites)

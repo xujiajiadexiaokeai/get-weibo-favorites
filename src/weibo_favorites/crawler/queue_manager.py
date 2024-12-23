@@ -23,7 +23,7 @@ class LongTextQueue:
                 port=config.REDIS_PORT,
                 db=config.REDIS_DB
             )
-            self.queue = Queue('weibo_long_text', connection=self.redis)
+            self.queue = Queue(config.LONG_TEXT_CONTENT_PROCESS_QUEUE, connection=self.redis)
             logger.info("长文本处理队列初始化成功")
         except Exception as e:
             logger.error(f"初始化Redis连接失败: {e}")

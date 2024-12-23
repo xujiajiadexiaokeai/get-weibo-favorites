@@ -38,7 +38,10 @@ RETRY_DELAY = 30  # 重试间隔（秒）
 SCHEDULER_PID_FILE = DATA_DIR / "scheduler.pid"
 SCHEDULER_STATUS_FILE = DATA_DIR / "scheduler_status.json"
 
-# Redis配置
+# Redis configuration
 REDIS_HOST = 'localhost'
 REDIS_PORT = 6379
 REDIS_DB = 0
+
+# Queue configuration
+LONG_TEXT_CONTENT_PROCESS_QUEUE = 'long_text_content_process'

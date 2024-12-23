@@ -10,6 +10,7 @@ from .crawler import crawl_favorites
 from ..database import save_weibo
 from .run_history import RunLogger
 from ..utils import LogManager
+from .queue_manager import LongTextQueue
 
 # 设置日志记录器
 logger = LogManager.setup_logger('scheduler')
@@ -25,6 +26,9 @@ class Scheduler:
         # 进程间通信文件
         self.pid_file = config.SCHEDULER_PID_FILE
         self.status_file = config.SCHEDULER_STATUS_FILE
+        
+        # 初始化队列管理器
+        self.queue_manager = LongTextQueue()
     
     def is_running(self):
         """检查调度器是否在运行"""
@@ -82,7 +86,7 @@ class Scheduler:
                 
                 # 开始执行任务
                 logger.info("开始执行爬取任务")
-                favorites = crawl_favorites(cookies)
+                favorites = crawl_favorites(cookies, self.queue_manager)
                 
                 if favorites:
                     # 保存到数据库
@@ -208,13 +212,14 @@ class Scheduler:
             }
     
     def _update_status(self):
-        """更新状态文件"""
+        """更新调度器状态文件"""
         status = {
             "running": self.running,
             "current_time": datetime.now().isoformat(),
             "next_run": self.next_run_time.isoformat() if self.next_run_time else None,
             "interval": self.interval
         }
+        
         try:
             with open(self.status_file, 'w') as f:
                 json.dump(status, f)
@@ -224,8 +229,10 @@ class Scheduler:
     def _cleanup_files(self):
         """清理状态文件"""
         try:
-            self.pid_file.unlink(missing_ok=True)
-            self.status_file.unlink(missing_ok=True)
+            if self.pid_file.exists():
+                self.pid_file.unlink()
+            if self.status_file.exists():
+                self.status_file.unlink()
         except Exception as e:
             logger.error(f"清理状态文件失败: {e}")
     
@@ -236,8 +243,13 @@ class Scheduler:
 
 def main():
     """主函数"""
+    scheduler = Scheduler()
+    
+    if scheduler.is_running():
+        print("调度器已在运行中")
+        return
+        
     try:
-        scheduler = Scheduler()
         scheduler.start()
     except KeyboardInterrupt:
         logger.info("收到终止信号，调度器停止运行")

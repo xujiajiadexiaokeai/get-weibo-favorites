@@ -49,10 +49,10 @@ def fetch_long_text(task_data):
             'error': 'Missing URL'
         }
     
-    logger.info(f"开始获取微博完整内容: {weibo_id}")
+    logger.info(f"开始获取微博完整长文本: {weibo_id}")
     
     try:
-        # 发送请求获取完整内容
+        # 发送请求获取完整长文本
         response = requests.get(
             url,
             headers=headers,

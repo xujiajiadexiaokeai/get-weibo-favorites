@@ -16,7 +16,7 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # 查询包含 URL 的数据
-cursor.execute("SELECT id, url FROM weibo_favorites")  # 替换 weibo_urls 为你的表名
+cursor.execute("SELECT id, url FROM weibo_favorites")
 rows = cursor.fetchall()
 
 # 处理每一行数据并提取 id 字段

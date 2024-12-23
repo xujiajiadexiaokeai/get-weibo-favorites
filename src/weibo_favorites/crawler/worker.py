@@ -22,7 +22,7 @@ def main():
         )
         
         # 设置队列名称
-        queue_name = 'weibo_long_text'
+        queue_name = config.LONG_TEXT_CONTENT_PROCESS_QUEUE
         
         # 启动工作进程
         w = Worker([queue_name], connection=redis_conn)
