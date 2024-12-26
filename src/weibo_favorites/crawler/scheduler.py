@@ -61,6 +61,8 @@ class Scheduler:
         logger.info("启动调度器")
         self._update_status()
         
+        last_cleanup_time = time.time()
+        
         while self.running:
             start_time = time.time()
             run_id = self.run_logger.start_new_run()
@@ -68,6 +70,11 @@ class Scheduler:
             
             try:
                 logger.info(f"开始新的任务周期: {datetime.now().isoformat()}")
+                
+                # 检查是否需要清理队列
+                if time.time() - last_cleanup_time >= config.QUEUE_CLEANUP_INTERVAL:
+                    self._cleanup_queue()
+                    last_cleanup_time = time.time()
                 
                 # 检查 cookies
                 if not self.check_cookies():
@@ -225,6 +232,19 @@ class Scheduler:
                 json.dump(status, f)
         except Exception as e:
             logger.error(f"更新状态文件失败: {e}")
+    
+    def _cleanup_queue(self):
+        """清理队列中的过期任务"""
+        try:
+            cleanup_result = self.queue_manager.cleanup_jobs()
+            logger.info(f"队列清理完成: {cleanup_result}")
+            
+            # 重试失败的任务
+            retry_count = self.queue_manager.retry_failed_jobs()
+            if retry_count > 0:
+                logger.info(f"重试了 {retry_count} 个失败任务")
+        except Exception as e:
+            logger.error(f"队列清理失败: {e}")
     
     def _cleanup_files(self):
         """清理状态文件"""

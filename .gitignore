@@ -32,3 +32,6 @@ data/
 docs/
 logs/
 .DS_Store
+
+# Extensions
+*.todo

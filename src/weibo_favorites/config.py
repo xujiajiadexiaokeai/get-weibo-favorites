@@ -45,3 +45,8 @@ REDIS_DB = 0
 
 # Queue configuration
 LONG_TEXT_CONTENT_PROCESS_QUEUE = 'long_text_content_process'
+MAX_RETRY_COUNT = 3  # 最大重试次数
+RETRY_DELAY = 300  # 重试延迟（秒）
+QUEUE_CLEANUP_INTERVAL = 86400  # 队列清理间隔（秒）
+FAILED_JOBS_RETENTION = 604800  # 失败任务保留时间（秒）
+FINISHED_JOBS_RETENTION = 86400  # 完成任务保留时间（秒）
