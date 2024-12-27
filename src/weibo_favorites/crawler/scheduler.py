@@ -10,7 +10,7 @@ from .crawler import crawl_favorites
 from ..database import save_weibo
 from .run_history import RunLogger
 from ..utils import LogManager
-from .queue_manager import LongTextQueue
+from .queue import LongTextProcessQueue
 
 # 设置日志记录器
 logger = LogManager.setup_logger('scheduler')
@@ -28,7 +28,7 @@ class Scheduler:
         self.status_file = config.SCHEDULER_STATUS_FILE
         
         # 初始化队列管理器
-        self.queue_manager = LongTextQueue()
+        self.ltp_queue = LongTextProcessQueue()
     
     def is_running(self):
         """检查调度器是否在运行"""
@@ -93,7 +93,7 @@ class Scheduler:
                 
                 # 开始执行任务
                 logger.info("开始执行爬取任务")
-                favorites = crawl_favorites(cookies, self.queue_manager)
+                favorites = crawl_favorites(cookies, self.ltp_queue)
                 
                 if favorites:
                     # 保存到数据库
@@ -236,11 +236,11 @@ class Scheduler:
     def _cleanup_queue(self):
         """清理队列中的过期任务"""
         try:
-            cleanup_result = self.queue_manager.cleanup_jobs()
+            cleanup_result = self.ltp_queue.cleanup_jobs()
             logger.info(f"队列清理完成: {cleanup_result}")
             
             # 重试失败的任务
-            retry_count = self.queue_manager.retry_failed_jobs()
+            retry_count = self.ltp_queue.retry_failed_jobs()
             if retry_count > 0:
                 logger.info(f"重试了 {retry_count} 个失败任务")
         except Exception as e:

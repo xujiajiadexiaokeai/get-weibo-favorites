@@ -1,5 +1,5 @@
 """
-队列管理模块，处理长文本微博的爬取队列
+队列模块，处理长文本微博的爬取队列
 """
 
 from datetime import datetime, timedelta
@@ -16,8 +16,8 @@ from .tasks import fetch_long_text
 
 logger = LogManager.setup_logger('queue')
 
-class LongTextQueue:
-    """长文本处理队列管理器"""
+class LongTextProcessQueue:
+    """长文本处理队列"""
     
     def __init__(self):
         """初始化Redis连接和队列"""
@@ -100,7 +100,6 @@ class LongTextQueue:
                 "active_workers": len(active_workers),
                 "total_workers": len(workers)
             })
-            logger.info(f"current队列状态: {status}")
             # 获取失败任务详情
             failed_jobs = []
             for job_id in self.failed_registry.get_job_ids():

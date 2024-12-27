@@ -11,7 +11,7 @@ from .. import config
 from ..utils import LogManager
 from .auth import load_cookies, create_session
 from ..database import save_weibo
-from .queue_manager import LongTextQueue
+from .queue import LongTextProcessQueue
 
 # 设置日志记录器
 logger = LogManager.setup_logger('crawler')
@@ -64,12 +64,12 @@ def save_crawler_state(state: dict):
     with open(config.CRAWLER_STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
-def crawl_favorites(cookies: List[Dict], queue_manager, page_number: int = 0) -> List[Dict]:
+def crawl_favorites(cookies: List[Dict], ltp_queue: LongTextProcessQueue, page_number: int = 0) -> List[Dict]:
     """爬取微博收藏
     
     Args:
         cookies: cookies列表
-        queue_manager: 队列管理器
+        ltp_queue: 长文本处理队列
         page_number: 要爬取的页数，0表示爬取所有页或直到重复内容为止
         
     Returns:
@@ -111,7 +111,7 @@ def crawl_favorites(cookies: List[Dict], queue_manager, page_number: int = 0) ->
                 # 如果是长文本，添加到队列
                 if weibo['is_long_text']:
                     try:
-                        job_id = queue_manager.add_task(weibo)
+                        job_id = ltp_queue.add_task(weibo)
                         logger.info(f"已将长文本微博添加到队列，ID: {weibo['id']}, Job ID: {job_id}")
                     except Exception as e:
                         logger.error(f"添加长文本任务失败: {e}")
@@ -152,7 +152,7 @@ def crawl_favorites(cookies: List[Dict], queue_manager, page_number: int = 0) ->
             logger.info("数据已保存到 favorites.json")
 
             # 输出队列状态
-            queue_status = queue_manager.get_queue_status()
+            queue_status = ltp_queue.get_queue_status()
             if queue_status:
                 logger.info(f"队列状态: {queue_status}")
     
@@ -243,7 +243,7 @@ def main():
             return
         
         # 获取收藏数据
-        favorites = crawl_favorites(cookies, LongTextQueue())
+        favorites = crawl_favorites(cookies, LongTextProcessQueue())
         # 保存到数据库
         try:
             save_weibo(favorites)
