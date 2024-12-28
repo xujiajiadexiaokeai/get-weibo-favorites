@@ -19,6 +19,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.venv/
 
 # IDE
 .idea/
@@ -27,7 +28,10 @@ wheels/
 *.swo
 
 # Project specific
-data/*.json
-data/*.db
+data/
+docs/
 logs/
 .DS_Store
+
+# Extensions
+*.todo

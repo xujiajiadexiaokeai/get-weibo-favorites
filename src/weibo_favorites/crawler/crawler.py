@@ -1,18 +1,17 @@
 """爬虫模块，负责爬取和解析微博收藏"""
 import json
 from datetime import datetime
-from pathlib import Path
 from time import sleep
-from typing import Dict, List, Optional
+from typing import Dict, List
 import traceback
 
 import requests
-from requests.exceptions import RequestException
 
 from .. import config
 from ..utils import LogManager
 from .auth import load_cookies, create_session
 from ..database import save_weibo
+from .queue import LongTextProcessQueue
 
 # 设置日志记录器
 logger = LogManager.setup_logger('crawler')
@@ -65,11 +64,12 @@ def save_crawler_state(state: dict):
     with open(config.CRAWLER_STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
-def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
+def crawl_favorites(cookies: List[Dict], ltp_queue: LongTextProcessQueue, page_number: int = 0) -> List[Dict]:
     """爬取微博收藏
     
     Args:
         cookies: cookies列表
+        ltp_queue: 长文本处理队列
         page_number: 要爬取的页数，0表示爬取所有页或直到重复内容为止
         
     Returns:
@@ -78,7 +78,6 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
     all_favorites = []
     page = 1
     
-    # TODO: 测试时不更新状态或者另外保存?
     # 加载上次爬取状态
     state = load_crawler_state()
     last_id = state.get("last_id")
@@ -98,6 +97,7 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
             elif not favorites:
                 logger.info("没有更多收藏了")
                 break
+
             # 检查是否遇到重复内容
             found_duplicate = False
             # 遍历收藏列表
@@ -107,8 +107,18 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
                 found_duplicate = check_duplicate(last_id, weibo['id'])
                 if found_duplicate:
                     break
-                else:
-                    all_favorites.append(weibo)
+
+                # 如果是长文本，添加到队列
+                if weibo['is_long_text']:
+                    try:
+                        job_id = ltp_queue.add_task(weibo)
+                        logger.info(f"已将长文本微博添加到队列，ID: {weibo['id']}, Job ID: {job_id}")
+                    except Exception as e:
+                        logger.error(f"添加长文本任务失败: {e}")
+                
+                all_favorites.append(weibo)
+                # 保存到数据库
+                save_weibo(weibo)
             
             if found_duplicate:
                 break
@@ -121,12 +131,12 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
     
     except Exception as e:
         logger.error(f"爬取过程出错: {str(e)}")
+        logger.error(traceback.format_exc())
     
     finally:
         session.close()
         
-        # 输出统计信息
-        # 如果有新数据，更新状态并保存
+        # 如果有新数据，更新状态
         if all_favorites:
             # 更新爬虫状态
             new_state = {
@@ -140,6 +150,11 @@ def crawl_favorites(cookies: List[Dict], page_number: int = 0) -> List[Dict]:
             with open(config.FAVORITES_FILE, 'w', encoding='utf-8') as f:
                 json.dump(all_favorites, f, ensure_ascii=False, indent=2)
             logger.info("数据已保存到 favorites.json")
+
+            # 输出队列状态
+            queue_status = ltp_queue.get_queue_status()
+            if queue_status:
+                logger.info(f"队列状态: {queue_status}")
     
     return all_favorites
 
@@ -193,6 +208,7 @@ def parse_weibo(data: Dict) -> Dict:
         
         weibo = {
             "id": str(data.get("idstr", "")),
+            "mblogid": str(data.get("mblogid", "")),
             "created_at": parse_weibo_time(data.get("created_at", "")),
             "url": f"https://weibo.com/{user.get('idstr', '')}/{data.get('mblogid', '')}" if user else "",
             "user_name": user.get("screen_name", ""),
@@ -200,9 +216,12 @@ def parse_weibo(data: Dict) -> Dict:
             "is_long_text": data.get("isLongText", False),
             "text": data.get("text_raw", ""),  # 使用 text_raw 而不是 text
             "text_html": data.get("text", ""),  # HTML 格式的文本
+            "long_text": "", # 需要后续从其他接口获取
             "source": data.get("source", ""),
             "links": links,
-            "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "crawled": False,  # 标记是否已经爬取了完整内容
+            "crawl_status": "pending" if data.get("isLongText", False) else "completed"  # 爬取状态
         }
         
         return weibo
@@ -224,7 +243,7 @@ def main():
             return
         
         # 获取收藏数据
-        favorites = crawl_favorites(cookies)
+        favorites = crawl_favorites(cookies, LongTextProcessQueue())
         # 保存到数据库
         try:
             save_weibo(favorites)
