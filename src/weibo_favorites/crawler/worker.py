@@ -24,10 +24,12 @@ def main():
         # 设置队列名称
         queue_name = config.LONG_TEXT_CONTENT_PROCESS_QUEUE
         
-        # 启动工作进程
+        # 创建工作进程
         w = Worker([queue_name], connection=redis_conn)
+        logger.info(f"工作进程已创建，监听队列: {queue_name}")
+        
+        # 开始工作
         w.work()
-        logger.info(f"工作进程已启动，监听队列: {queue_name}")
     except KeyboardInterrupt:
         redis_conn.connection_pool.disconnect()
         logger.info("收到终止信号，工作进程停止运行")
