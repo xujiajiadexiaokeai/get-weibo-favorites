@@ -79,7 +79,7 @@ def fetch_long_text(task_data):
             'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        # update_weibo_content(weibo_id, update_data)
+        update_weibo_content(weibo_id, update_data)
         with open(config.DATA_DIR / "long_text.json", 'w', encoding='utf-8') as f:
                 json.dump(update_data, f, ensure_ascii=False, indent=2)
         logger.info("数据已保存到 long_text.json")

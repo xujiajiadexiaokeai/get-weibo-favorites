@@ -61,6 +61,8 @@ def save_weibo(weibo: Dict[str, Any]):
             weibo.get('updated_at')
         ))
         conn.commit()
+    except Exception as e:
+        logger.error(f"保存微博数据失败: {e}")
     finally:
         conn.close()
 
@@ -96,7 +98,8 @@ def update_weibo_content(weibo_id: str, update_data: Dict[str, Any]):
         
         cursor.execute(sql, values)
         conn.commit()
-        
+    except Exception as e:
+        logger.error(f"更新微博内容失败: {e}")
     finally:
         conn.close()
 
@@ -115,6 +118,8 @@ def get_pending_long_text_weibos() -> List[Dict[str, Any]]:
         
         columns = ['id', 'mblogid', 'is_long_text', 'crawl_status']
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
+    except Exception as e:
+        logger.error(f"获取待处理的长文本微博失败: {e}")
+        return None
     finally:
         conn.close()
