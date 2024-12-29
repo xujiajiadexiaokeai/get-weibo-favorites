@@ -102,7 +102,7 @@ def crawl_favorites(cookies: List[Dict], ltp_queue: LongTextProcessQueue, page_n
             found_duplicate = False
             # 遍历收藏列表
             for item in favorites:
-                weibo = parse_weibo(item)
+                weibo = parse_weibo(item)  # 解析item
                 # 检查是否遇到已爬取的内容
                 found_duplicate = check_duplicate(last_id, weibo['id'])
                 if found_duplicate:
@@ -195,8 +195,12 @@ def parse_weibo(data: Dict) -> Dict:
     Returns:
         解析后的微博数据
     """
+    def safe_str(value) -> str:
+        """安全地将值转换为字符串，None转换为空字符串"""
+        return str(value) if value is not None else ""
+    
     try:
-        user = data.get("user", {})
+        user = data.get("user", {}) or {}  # 确保user是字典
         
         # 提取链接，如果url_struct不存在或为空，则返回空列表
         links = []
@@ -207,17 +211,17 @@ def parse_weibo(data: Dict) -> Dict:
                     links.append(u["long_url"])
         
         weibo = {
-            "id": str(data.get("idstr", "")),
-            "mblogid": str(data.get("mblogid", "")),
+            "id": safe_str(data.get("idstr")),
+            "mblogid": safe_str(data.get("mblogid")),
             "created_at": parse_weibo_time(data.get("created_at", "")),
-            "url": f"https://weibo.com/{user.get('idstr', '')}/{data.get('mblogid', '')}" if user else "",
-            "user_name": user.get("screen_name", ""),
-            "user_id": str(user.get("idstr", "")),
+            "url": f"https://weibo.com/{safe_str(user.get('idstr'))}/{safe_str(data.get('mblogid'))}" if user else "",
+            "user_name": safe_str(user.get("screen_name")),
+            "user_id": safe_str(user.get("idstr")),
             "is_long_text": data.get("isLongText", False),
-            "text": data.get("text_raw", ""),  # 使用 text_raw 而不是 text
-            "text_html": data.get("text", ""),  # HTML 格式的文本
-            "long_text": "", # 需要后续从其他接口获取
-            "source": data.get("source", ""),
+            "text": safe_str(data.get("text_raw")),  # 使用 text_raw 而不是 text
+            "text_html": safe_str(data.get("text")),  # HTML 格式的文本
+            "long_text": "",  # 需要后续从其他接口获取
+            "source": safe_str(data.get("source")),
             "links": links,
             "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "crawled": False,  # 标记是否已经爬取了完整内容
@@ -228,7 +232,7 @@ def parse_weibo(data: Dict) -> Dict:
     except Exception as e:
         logger.error(f"解析微博数据时出错: {str(e)}")
         return {
-            "id": str(data.get("idstr", "")),
+            "id": safe_str(data.get("idstr")),
             "error": f"解析错误: {str(e)}",
             "raw_data": data
         }

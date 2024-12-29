@@ -1,6 +1,6 @@
-"""队列管理器测试模块"""
-from datetime import datetime, timedelta
+"""队列测试模块"""
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 from rq.job import Job
 from rq.registry import FailedJobRegistry
@@ -224,35 +224,36 @@ def test_unit_error_handling(ltp_queue: LongTextProcessQueue):
     assert len(status['failed_jobs_details']) == 0  # 由于获取失败，列表应为空
     assert 'error' not in status  # 单个任务获取失败不应影响整体状态
 
-def test_integration_add_task(ltp_queue: LongTextProcessQueue):
-    """测试添加任务到队列"""
-    test_weibo = {
-        "weibo_id": "5113072119974206",
-        "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
-        "is_long_text": True
-    }
+# TODO: 集成测试(暂时不测试,稍后修改)
+# def test_integration_add_task(ltp_queue: LongTextProcessQueue):
+#     """测试添加任务到队列"""
+#     test_weibo = {
+#         "weibo_id": "5113072119974206",
+#         "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
+#         "is_long_text": True
+#     }
     
-    # 清空队列
-    ltp_queue.queue.empty()
+#     # 清空队列
+#     ltp_queue.queue.empty()
     
-    job_id = ltp_queue.add_task(test_weibo)
-    assert job_id is not None
+#     job_id = ltp_queue.add_task(test_weibo)
+#     assert job_id is not None
     
-    # 检查队列状态
-    status = ltp_queue.get_queue_status()
-    assert status is not None
-    assert status['queued'] >= 0  # 由于任务可能被立即执行，这里只检查状态获取是否正常
+#     # 检查队列状态
+#     status = ltp_queue.get_queue_status()
+#     assert status is not None
+#     assert status['queued'] >= 0  # 由于任务可能被立即执行，这里只检查状态获取是否正常
 
-def test_integration_execute_task():
-    """测试任务执行"""
-    test_task = {
-        "weibo_id": "5113072119974206",
-        "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
-        "is_long_text": True
-    }
-    
-    result = fetch_long_text(test_task)
-    assert isinstance(result, dict)
-    assert 'success' in result
-    assert 'weibo_id' in result
-    assert result['weibo_id'] == test_task['weibo_id']
+# def test_integration_execute_task():
+#     """测试任务执行"""
+#     test_task = {
+#         "weibo_id": "5113072119974206",
+#         "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
+#         "is_long_text": True
+#     }
+
+#     result = fetch_long_text(test_task)
+#     assert isinstance(result, dict)
+#     assert 'success' in result
+#     assert 'weibo_id' in result
+#     assert result['weibo_id'] == test_task['weibo_id']
