@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from weibo_favorites import config
-from weibo_favorites.crawler.auth import create_session, load_cookies
+from weibo_favorites.crawler.auth import get_session
 from weibo_favorites.crawler.crawler import (
     check_duplicate,
     crawl_favorites,
@@ -209,9 +209,10 @@ def mock_queue():
 
 @pytest.fixture
 def mock_session():
-    """模拟请求会话"""
+    """模拟会话对象"""
     session = MagicMock()
-    return session
+    with patch("weibo_favorites.crawler.auth.get_session", return_value=session):
+        yield session
 
 
 def test_unit_crawl_favorites_basic(mock_queue, mock_session):
@@ -234,12 +235,10 @@ def test_unit_crawl_favorites_basic(mock_queue, mock_session):
     m = mock_open(read_data=json.dumps(state_data))
 
     with patch("builtins.open", m), patch(
-        "weibo_favorites.crawler.crawler.create_session", return_value=mock_session
+        "weibo_favorites.crawler.auth.get_session", return_value=mock_session
     ), patch("weibo_favorites.crawler.crawler.save_weibo") as mock_save_weibo:
         # 执行爬取
-        result = crawl_favorites(
-            cookies=[{"cookie": "test"}], ltp_queue=mock_queue, page_number=1
-        )
+        result = crawl_favorites(ltp_queue=mock_queue)
 
         # 验证结果
         assert len(result) == 1
@@ -275,12 +274,10 @@ def test_unit_crawl_favorites_duplicate_check(mock_queue, mock_session):
     mock_session.get.return_value.json.return_value = {"data": test_weibos}
 
     with patch("builtins.open", mock_open(read_data=json.dumps(state_data))), patch(
-        "weibo_favorites.crawler.crawler.create_session", return_value=mock_session
+        "weibo_favorites.crawler.auth.get_session", return_value=mock_session
     ), patch("weibo_favorites.crawler.crawler.save_weibo") as mock_save_weibo:
         # 执行爬取
-        result = crawl_favorites(
-            cookies=[{"cookie": "test"}], ltp_queue=mock_queue, page_number=1
-        )
+        result = crawl_favorites(ltp_queue=mock_queue)
 
         # 验证结果：应该只保存第一条微博
         assert len(result) == 1
@@ -296,12 +293,10 @@ def test_unit_crawl_favorites_error_handling(mock_queue, mock_session):
     mock_session.get.side_effect = Exception("Network Error")
 
     with patch("builtins.open", mock_open(read_data="{}")), patch(
-        "weibo_favorites.crawler.crawler.create_session", return_value=mock_session
+        "weibo_favorites.crawler.auth.get_session", return_value=mock_session
     ):
         # 执行爬取
-        result = crawl_favorites(
-            cookies=[{"cookie": "test"}], ltp_queue=mock_queue, page_number=1
-        )
+        result = crawl_favorites(ltp_queue=mock_queue)
 
         # 验证结果
         assert result == []
@@ -316,12 +311,10 @@ def test_unit_crawl_favorites_empty_response(mock_queue, mock_session):
     mock_session.get.return_value.json.return_value = {"data": []}
 
     with patch("builtins.open", mock_open(read_data="{}")), patch(
-        "weibo_favorites.crawler.crawler.create_session", return_value=mock_session
+        "weibo_favorites.crawler.auth.get_session", return_value=mock_session
     ):
         # 执行爬取
-        result = crawl_favorites(
-            cookies=[{"cookie": "test"}], ltp_queue=mock_queue, page_number=1
-        )
+        result = crawl_favorites(ltp_queue=mock_queue)
 
         # 验证结果
         assert result == []
@@ -345,12 +338,10 @@ def test_unit_crawl_favorites_queue_error(mock_queue, mock_session):
     mock_session.get.return_value.json.return_value = {"data": [test_weibo]}
 
     with patch("builtins.open", mock_open(read_data="{}")), patch(
-        "weibo_favorites.crawler.crawler.create_session", return_value=mock_session
+        "weibo_favorites.crawler.auth.get_session", return_value=mock_session
     ), patch("weibo_favorites.crawler.crawler.save_weibo") as mock_save_weibo:
         # 执行爬取
-        result = crawl_favorites(
-            cookies=[{"cookie": "test"}], ltp_queue=mock_queue, page_number=1
-        )
+        result = crawl_favorites(ltp_queue=mock_queue)
 
         # 验证结果：即使队列出错，也应该保存微博
         assert len(result) == 1

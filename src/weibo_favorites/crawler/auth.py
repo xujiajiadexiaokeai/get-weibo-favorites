@@ -68,10 +68,13 @@ class CookieManager:
     def _create_session(self):
         """创建请求会话"""
         self._session = requests.Session()
-        
+
         # 设置cookies
         for cookie in self.cookies:
-            self._session.cookies.set(cookie["name"], cookie["value"])
+            if isinstance(cookie, dict) and "name" in cookie and "value" in cookie:
+                self._session.cookies.set(cookie["name"], cookie["value"])
+            else:
+                logger.error(f"cookie格式错误: {cookie}")
 
         # 设置请求头
         self._session.headers.update(
@@ -291,7 +294,10 @@ def get_session() -> Optional[requests.Session]:
     Returns:
         Optional[requests.Session]: 会话对象，如果cookie无效则返回None
     """
-    return cookie_manager.get_session()
+    cookie_manager = CookieManager()
+    valid, _ = cookie_manager.check_validity()
+    return cookie_manager._session if valid else None
+
 
 def get_cookie_status() -> Dict:
     """获取cookie状态信息
@@ -299,6 +305,7 @@ def get_cookie_status() -> Dict:
     Returns:
         Dict: 状态信息
     """
+    cookie_manager = CookieManager()
     return cookie_manager.get_status()
 
 

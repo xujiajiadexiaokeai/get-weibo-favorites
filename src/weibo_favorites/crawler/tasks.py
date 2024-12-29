@@ -10,7 +10,7 @@ import requests
 from .. import config
 from ..database import update_weibo_content
 from ..utils import LogManager
-from .auth import load_cookies
+from .auth import CookieManager
 
 logger = LogManager.setup_logger("task")
 
@@ -33,9 +33,16 @@ def fetch_long_text(task_data):
     Returns:
         dict: 处理结果
     """
+    cookie_manager = CookieManager()
+    valid, error = cookie_manager.check_validity()
+    if valid:
+        cookies = cookie_manager.get_cookies()
+    else:
+        logger.error(f"Cookie验证失败：{error},fetch_long_text任务中止")
+        return {"success": False, "weibo_id": task_data["weibo_id"], "error": error}
+    
     weibo_id = task_data["weibo_id"]
     url = task_data.get("url")
-    cookies = load_cookies()
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",

@@ -37,6 +37,23 @@
         </div>
     </div>
 
+    <!-- Cookie状态 -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold mb-4">Cookie状态</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <p class="text-gray-600">状态: 
+                    <span id="cookieStatus" class="font-medium">
+                        <span class="text-gray-600">-</span>
+                    </span>
+                </p>
+                <p class="text-gray-600">用户: <span id="cookieUser" class="font-medium">-</span></p>
+                <p class="text-gray-600">Cookie数量: <span id="cookieCount" class="font-medium">-</span></p>
+                <p class="text-gray-600">最后检查时间: <span id="cookieLastCheck" class="font-medium">-</span></p>
+            </div>
+        </div>
+    </div>
+
     <!-- 日志查看器 -->
     <div class="bg-white shadow rounded-lg p-6">
         <div class="flex justify-between items-center mb-4">
@@ -110,6 +127,33 @@ function updateSchedulerStatus() {
         });
 }
 
+function updateCookieStatus() {
+    fetch('/api/cookie/status')
+        .then(response => response.json())
+        .then(data => {
+            const statusSpan = document.getElementById('cookieStatus');
+            const userSpan = document.getElementById('cookieUser');
+            const countSpan = document.getElementById('cookieCount');
+            const lastCheckSpan = document.getElementById('cookieLastCheck');
+            
+            if (data.is_valid) {
+                statusSpan.innerHTML = '<span class="text-green-600">有效</span>';
+                userSpan.textContent = data.user_info ? data.user_info.screen_name : '-';
+            } else {
+                statusSpan.innerHTML = '<span class="text-red-600">无效</span>';
+                userSpan.textContent = '-';
+            }
+            
+            countSpan.textContent = data.cookies_count || '-';
+            lastCheckSpan.textContent = data.last_check_time ? new Date(data.last_check_time).toLocaleString() : '-';
+        })
+        .catch(error => {
+            console.error('获取Cookie状态失败:', error);
+            const statusSpan = document.getElementById('cookieStatus');
+            statusSpan.innerHTML = '<span class="text-red-600">获取失败</span>';
+        });
+}
+
 document.getElementById('controlButton').addEventListener('click', function() {
     const action = this.textContent.trim() === '启动调度器' ? 'start' : 'stop';
     
@@ -127,9 +171,14 @@ document.getElementById('controlButton').addEventListener('click', function() {
 });
 
 // 初始加载
-refreshLogs();
-updateSchedulerStatus();
+document.addEventListener('DOMContentLoaded', function() {
+    refreshLogs();
+    updateSchedulerStatus();
+    updateCookieStatus(); // 页面加载时立即更新一次
+});
+
 setInterval(refreshLogs, 5000);  // 每5秒刷新一次日志
 setInterval(updateSchedulerStatus, 5000);  // 每5秒更新一次状态
+setInterval(updateCookieStatus, 60000); // 每分钟更新一次
 </script>
 {% endblock %}
