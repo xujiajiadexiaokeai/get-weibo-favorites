@@ -6,9 +6,22 @@ setup(
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[
-        "selenium",
-        "requests",
+        "selenium>=4.15.2",
+        "webdriver-manager>=4.0.1",
+        "flask>=3.0.0",
+        "requests>=2.31.0",
+        "redis>=5.0.0",
+        "rq>=1.15.1",
     ],
+    extras_require={
+        'dev': [
+            'pytest>=7.4.3',
+            'pytest-cov>=4.1.0',
+            'black>=23.0.0',
+            'isort>=5.12.0',
+            'flake8>=6.1.0',
+        ],
+    },
     python_requires=">=3.8",
     author="xujiajiadexiaokeai",
     author_email="",  # 添加你的邮箱
