@@ -39,12 +39,12 @@ SCHEDULER_PID_FILE = DATA_DIR / "scheduler.pid"
 SCHEDULER_STATUS_FILE = DATA_DIR / "scheduler_status.json"
 
 # Redis configuration
-REDIS_HOST = 'localhost'
+REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 REDIS_DB = 0
 
 # Queue configuration
-LONG_TEXT_CONTENT_PROCESS_QUEUE = 'long_text_content_process'
+LONG_TEXT_CONTENT_PROCESS_QUEUE = "long_text_content_process"
 MAX_RETRY_COUNT = 3  # 最大重试次数
 RETRY_DELAY = 300  # 重试延迟（秒）
 QUEUE_CLEANUP_INTERVAL = 86400  # 队列清理间隔（秒）

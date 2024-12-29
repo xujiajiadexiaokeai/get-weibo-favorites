@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="weibo-favorites",
@@ -14,12 +14,12 @@ setup(
         "rq>=1.15.1",
     ],
     extras_require={
-        'dev': [
-            'pytest>=7.4.3',
-            'pytest-cov>=4.1.0',
-            'black>=23.0.0',
-            'isort>=5.12.0',
-            'flake8>=6.1.0',
+        "dev": [
+            "pytest>=7.4.3",
+            "pytest-cov>=4.1.0",
+            "black>=23.0.0",
+            "isort>=5.12.0",
+            "flake8>=6.1.0",
         ],
     },
     python_requires=">=3.8",
