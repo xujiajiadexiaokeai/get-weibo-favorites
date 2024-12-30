@@ -36,11 +36,11 @@ def fetch_long_text(task_data):
     cookie_manager = CookieManager()
     valid, error = cookie_manager.check_validity()
     if valid:
-        cookies = cookie_manager.get_cookies()
+        cookies = cookie_manager.cookies
     else:
         logger.error(f"Cookie验证失败：{error},fetch_long_text任务中止")
         return {"success": False, "weibo_id": task_data["weibo_id"], "error": error}
-    
+
     weibo_id = task_data["weibo_id"]
     url = task_data.get("url")
 

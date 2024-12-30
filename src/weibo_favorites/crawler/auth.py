@@ -30,7 +30,6 @@ class CookieManager:
         self.last_check_time: Optional[datetime] = None
         self.is_valid: bool = False
         self.user_info: Optional[Dict] = None
-        self._session: Optional[requests.Session] = None
         self.load_cookies()
 
     def load_cookies(self) -> bool:
@@ -42,7 +41,6 @@ class CookieManager:
         try:
             with open(config.COOKIES_FILE, "r", encoding="utf-8") as f:
                 self.cookies = json.load(f)
-            self._create_session()
             return True
         except FileNotFoundError:
             logger.error("Cookie文件不存在，请先运行 auth.py 获取cookies")
@@ -65,19 +63,19 @@ class CookieManager:
             logger.error(f"保存cookies失败: {e}")
             return False
 
-    def _create_session(self):
+    def create_session(self):
         """创建请求会话"""
-        self._session = requests.Session()
+        session = requests.Session()
 
         # 设置cookies
         for cookie in self.cookies:
             if isinstance(cookie, dict) and "name" in cookie and "value" in cookie:
-                self._session.cookies.set(cookie["name"], cookie["value"])
+                session.cookies.set(cookie["name"], cookie["value"])
             else:
                 logger.error(f"cookie格式错误: {cookie}")
 
         # 设置请求头
-        self._session.headers.update(
+        session.headers.update(
             {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 "Accept": "application/json, text/plain, */*",
@@ -85,6 +83,7 @@ class CookieManager:
                 "Referer": "https://weibo.com/fav",
             }
         )
+        return session
 
     def check_validity(self) -> Tuple[bool, Optional[str]]:
         """检查cookie是否有效
@@ -92,32 +91,30 @@ class CookieManager:
         Returns:
             Tuple[bool, Optional[str]]: (是否有效, 错误信息)
         """
-        if not self._session:
-            return False, "会话未初始化"
-
+        session = self.create_session()
         try:
-            weibo_uid = os.getenv("WEIBO_UID") or ""
+            weibo_uid = get_weibo_uid_from_env()
             # 使用用户信息接口检查cookie有效性
-            response = self._session.get(
-                f"https://weibo.com/ajax/profile/info?uid={weibo_uid}",
-                timeout=10
+            response = session.get(
+                f"https://weibo.com/ajax/profile/info?uid={weibo_uid}", timeout=10
             )
             response.raise_for_status()
+
+            # 解析响应
             data = response.json()
-            
             if "data" in data and "user" in data["data"]:
                 self.is_valid = True
                 self.user_info = data["data"]["user"]
                 self.last_check_time = datetime.now()
+                # 在有效的响应下更新cookies
                 self._update_cookies_from_response(response)
                 return True, None
             else:
                 self.is_valid = False
                 return False, "无法获取用户信息"
-
-        except requests.RequestException as e:
+        except Exception as e:
             self.is_valid = False
-            return False, f"请求失败: {str(e)}"
+            return False, f"检查有效性失败: {str(e)}"
 
     def _update_cookies_from_response(self, response: requests.Response):
         """从响应中更新cookies
@@ -127,9 +124,6 @@ class CookieManager:
         """
         new_cookies = response.cookies.get_dict()
         if new_cookies:
-            # 更新session中的cookies
-            self._session.cookies.update(new_cookies)
-            
             # 更新cookies列表
             for name, value in new_cookies.items():
                 # 查找并更新已存在的cookie
@@ -143,8 +137,7 @@ class CookieManager:
                 if not updated:
                     # 从response.cookies中获取完整的cookie信息
                     cookie_obj = next(
-                        (c for c in response.cookies if c.name == name),
-                        None
+                        (c for c in response.cookies if c.name == name), None
                     )
                     if cookie_obj:
                         new_cookie = {
@@ -154,7 +147,7 @@ class CookieManager:
                             "path": cookie_obj.path or "/",
                             "secure": cookie_obj.secure,
                             "httpOnly": cookie_obj.has_nonstandard_attr("HttpOnly"),
-                            "sameSite": "None" if cookie_obj.secure else "Lax"
+                            "sameSite": "None" if cookie_obj.secure else "Lax",
                         }
                         # 添加过期时间（如果有）
                         if cookie_obj.expires:
@@ -162,26 +155,20 @@ class CookieManager:
                         self.cookies.append(new_cookie)
                     else:
                         # 如果无法获取完整信息，使用默认值
-                        self.cookies.append({
-                            "name": name,
-                            "value": value,
-                            "domain": ".weibo.com",
-                            "path": "/",
-                            "secure": True,
-                            "httpOnly": True,
-                            "sameSite": "None"
-                        })
-            
+                        self.cookies.append(
+                            {
+                                "name": name,
+                                "value": value,
+                                "domain": ".weibo.com",
+                                "path": "/",
+                                "secure": True,
+                                "httpOnly": True,
+                                "sameSite": "None",
+                            }
+                        )
+
             # 保存更新后的cookies
             self.save_cookies()
-
-    def get_session(self) -> Optional[requests.Session]:
-        """获取当前会话
-
-        Returns:
-            Optional[requests.Session]: 会话对象
-        """
-        return self._session if self.is_valid else None
 
     def get_status(self) -> Dict:
         """获取cookie状态信息
@@ -190,16 +177,27 @@ class CookieManager:
             Dict: 状态信息
         """
         # 如果超过5分钟没有检查，重新检查有效性
-        if (not self.last_check_time or 
-            datetime.now() - self.last_check_time > timedelta(minutes=5)):
+        if (
+            not self.last_check_time
+            or datetime.now() - self.last_check_time > timedelta(minutes=5)
+        ):
             self.check_validity()
-        
+
         return {
             "is_valid": self.is_valid,
-            "last_check_time": self.last_check_time.isoformat() if self.last_check_time else None,
+            "last_check_time": self.last_check_time.isoformat()
+            if self.last_check_time
+            else None,
             "user_info": self.user_info,
-            "cookies_count": len(self.cookies)
+            "cookies_count": len(self.cookies),
         }
+
+
+def get_weibo_uid_from_env() -> str:
+    weibo_uid = os.getenv("WEIBO_UID")
+    if not weibo_uid:
+        raise Exception("WEIBO_UID必须提供")
+    return weibo_uid
 
 
 def get_weibo_cookies() -> List[Dict]:
@@ -286,27 +284,6 @@ def get_weibo_cookies() -> List[Dict]:
     finally:
         if driver:
             driver.quit()
-
-
-def get_session() -> Optional[requests.Session]:
-    """获取有效的会话对象
-
-    Returns:
-        Optional[requests.Session]: 会话对象，如果cookie无效则返回None
-    """
-    cookie_manager = CookieManager()
-    valid, _ = cookie_manager.check_validity()
-    return cookie_manager._session if valid else None
-
-
-def get_cookie_status() -> Dict:
-    """获取cookie状态信息
-
-    Returns:
-        Dict: 状态信息
-    """
-    cookie_manager = CookieManager()
-    return cookie_manager.get_status()
 
 
 if __name__ == "__main__":

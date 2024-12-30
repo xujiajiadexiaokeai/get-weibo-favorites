@@ -10,7 +10,6 @@ import requests
 from .. import config
 from ..database import save_weibo
 from ..utils import LogManager
-from .auth import get_session
 from .queue import LongTextProcessQueue
 
 # 设置日志记录器
@@ -67,6 +66,7 @@ def save_crawler_state(state: dict):
 
 def crawl_favorites(
     ltp_queue: LongTextProcessQueue,
+    session: requests.Session,
     page_number: int = 0,
 ) -> List[Dict]:
     """爬取微博收藏
@@ -84,9 +84,6 @@ def crawl_favorites(
     # 加载上次爬取状态
     state = load_crawler_state()
     last_id = state.get("last_id")
-
-    # 获取session
-    session = get_session()
 
     try:
         while True:

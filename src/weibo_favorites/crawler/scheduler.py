@@ -96,9 +96,12 @@ class Scheduler:
                     )
                     continue
 
+                # 创建session
+                session = cookie_manager.create_session()
+
                 # 开始执行任务
                 logger.info("开始执行爬取任务")
-                favorites = crawl_favorites(self.ltp_queue)
+                favorites = crawl_favorites(self.ltp_queue, session)
 
                 if favorites:
                     # 保存到数据库
@@ -127,7 +130,9 @@ class Scheduler:
                 logger.info(f"本次任务耗时: {duration:.2f} 秒")
 
                 # 更新下次执行时间并等待
-                self.next_run_time = datetime.now() + timedelta(seconds=self.run_interval)
+                self.next_run_time = datetime.now() + timedelta(
+                    seconds=self.run_interval
+                )
                 self._update_status()
 
                 wait_time = self.run_interval - duration

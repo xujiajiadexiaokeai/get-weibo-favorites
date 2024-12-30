@@ -6,6 +6,7 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
 from .. import config
@@ -13,7 +14,6 @@ from ..crawler.auth import CookieManager
 from ..crawler.run_history import RunLogger
 from ..crawler.scheduler import Scheduler
 from ..utils import LogManager
-from dotenv import load_dotenv
 
 # 加载 .env 文件
 load_dotenv()
@@ -198,14 +198,14 @@ def run_web():
     # 确保日志和数据目录存在
     os.makedirs(config.LOGS_DIR, exist_ok=True)
     os.makedirs(config.DATA_DIR, exist_ok=True)
-    
+
     # cookie有效性检验
     valid, error = cookie_manager.check_validity()
     if not valid:
         logger.warning(f"Cookie无效: {error}")
     else:
         logger.info("Cookie验证成功")
-        
+
         # 自动启动调度器
         if not scheduler.running:
             # scheduler.start(cookie_manager)
