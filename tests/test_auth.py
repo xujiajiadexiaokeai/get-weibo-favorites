@@ -257,7 +257,7 @@ def test_get_status(cookie_manager):
 def test_get_status_auto_check(cookie_manager):
     """测试状态获取时的自动检查"""
     cookie_manager.is_valid = True
-    cookie_manager.last_check_time = datetime.now() - timedelta(minutes=10)
+    cookie_manager.last_check_time = datetime.now() - timedelta(minutes=30)  # 模拟上次检查时间超过30分钟，目前检查间隔为20分钟
 
     mock_response = MagicMock()
     mock_response.json.return_value = {"data": {"user": {"screen_name": "test_user"}}}
