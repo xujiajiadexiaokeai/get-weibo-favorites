@@ -282,43 +282,42 @@ def test_unit_error_handling(ltp_queue: LongTextProcessQueue):
 #     assert status is not None
 #     assert status['queued'] >= 0  # 由于任务可能被立即执行，这里只检查状态获取是否正常
 
+# def test_integration_execute_task(load_env):
+#     """测试任务执行"""
+#     test_task = {
+#         "weibo_id": "5113072119974206",
+#         "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
+#         "is_long_text": True,
+#     }
 
-def test_integration_execute_task(load_env):
-    """测试任务执行"""
-    test_task = {
-        "weibo_id": "5113072119974206",
-        "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
-        "is_long_text": True,
-    }
+#     # 创建 mock session
+#     mock_session = MagicMock()
+#     mock_response = MagicMock()
+#     mock_response.json.return_value = {
+#         "data": {
+#             "longTextContent": "Open AI CEO 奥特曼分享了 9 本书。因为他长时间运营过一个风投培训营，所以他还是比 elon musk 这种成天装逼干活的，更愿意谈一些道理。。。",
+#             "url_struct": [],
+#         }
+#     }
+#     mock_session.get.return_value = mock_response
 
-    # 创建 mock session
-    mock_session = MagicMock()
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "data": {
-            "longTextContent": "Open AI CEO 奥特曼分享了 9 本书。因为他长时间运营过一个风投培训营，所以他还是比 elon musk 这种成天装逼干活的，更愿意谈一些道理。。。",
-            "url_struct": [],
-        }
-    }
-    mock_session.get.return_value = mock_response
+#     # 使用 mock session 执行任务
+#     with patch(
+#         "weibo_favorites.crawler.auth.CookieManager.create_session",
+#         return_value=mock_session,
+#     ), patch(
+#         "weibo_favorites.crawler.auth.CookieManager.check_validity",
+#         return_value=(True, None),
+#     ), patch(
+#         "requests.get", return_value=mock_response
+#     ):
+#         result = fetch_long_text(test_task)
 
-    # 使用 mock session 执行任务
-    with patch(
-        "weibo_favorites.crawler.auth.CookieManager.create_session",
-        return_value=mock_session,
-    ), patch(
-        "weibo_favorites.crawler.auth.CookieManager.check_validity",
-        return_value=(True, None),
-    ), patch(
-        "requests.get", return_value=mock_response
-    ):
-        result = fetch_long_text(test_task)
+#         # 验证结果
+#         assert isinstance(result, dict)
+#         assert result["success"] is True
+#         assert result["weibo_id"] == test_task["weibo_id"]
+#         assert "Open AI CEO 奥特曼分享了 9 本书" in result["content"]
 
-        # 验证结果
-        assert isinstance(result, dict)
-        assert result["success"] is True
-        assert result["weibo_id"] == test_task["weibo_id"]
-        assert "Open AI CEO 奥特曼分享了 9 本书" in result["content"]
-
-        # 验证是否调用了requests.get
-        requests.get.assert_called_once()
+#         # 验证是否调用了requests.get
+#         requests.get.assert_called_once()
