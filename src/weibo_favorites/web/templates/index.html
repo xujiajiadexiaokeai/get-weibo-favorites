@@ -4,55 +4,58 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- 调度器状态 -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-semibold">调度器状态</h2>
-            <button id="controlButton" class="px-3 py-1 rounded-md text-white text-sm font-medium transition-colors">
-                查询中
-            </button>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <p class="text-gray-600">状态: 
-                    <span id="schedulerStatus" class="font-medium">
-                        <span class="text-gray-600">-</span>
-                    </span>
-                </p>
-                <p class="text-gray-600">运行间隔: <span id="runInterval" class="font-medium">{{ run_interval }}</span>分钟</p>
-                <p class="text-gray-600">下次运行时间: <span id="nextRunTime" class="font-medium">{{ next_run_time }}</span></p>
-                <p class="text-gray-600">更新时间: <span id="lastUpdateTime" class="font-medium">{{ last_update_time }}</span></p>
+    <div class="flex flex-col md:flex-row gap-4">
+        <!-- 调度器状态 -->
+        <div class="flex-1 bg-white shadow rounded-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">调度器状态</h2>
+                <button id="controlButton" class="px-3 py-1 rounded-md text-white text-sm font-medium transition-colors">
+                    查询中
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <p class="text-gray-600">状态: 
+                        <span id="schedulerStatus" class="font-medium">
+                            <span class="text-gray-600">-</span>
+                        </span>
+                    </p>
+                    <p class="text-gray-600">运行间隔: <span id="runInterval" class="font-medium">{{ run_interval }}</span>分钟</p>
+                    <p class="text-gray-600">下次运行时间: <span id="nextRunTime" class="font-medium">{{ next_run_time }}</span></p>
+                    <p class="text-gray-600">更新时间: <span id="lastUpdateTime" class="font-medium">{{ last_update_time }}</span></p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- 爬虫状态 -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">爬虫状态</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <p class="text-gray-600"><pre id="crawler-state" class="font-medium">{{ crawler_state }}</pre></p>
-                <p class="text-gray-600">更新时间: <span id="current-time" class="font-medium">{{ current_time }}</span></p>
+        <!-- 爬虫状态 -->
+        <div class="flex-1 bg-white shadow rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">爬虫状态</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <p class="text-gray-600"><div id="crawler-state" class="font-medium whitespace-normal">{{ crawler_state }}</div></p>
+                    <p class="text-gray-600">更新时间: <span id="current-time" class="font-medium">{{ current_time }}</span></p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Cookie状态 -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Cookie状态</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <p class="text-gray-600">状态: 
-                    <span id="cookieStatus" class="font-medium">
-                        <span class="text-gray-600">-</span>
-                    </span>
-                </p>
-                <p class="text-gray-600">用户: <span id="cookieUser" class="font-medium">-</span></p>
-                <p class="text-gray-600">Cookie数量: <span id="cookieCount" class="font-medium">-</span></p>
-                <p class="text-gray-600">最后检查时间: <span id="cookieLastCheck" class="font-medium">-</span></p>
+        <!-- Cookie状态 -->
+        <div class="flex-1 bg-white shadow rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Cookie状态</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <p class="text-gray-600">状态: 
+                        <span id="cookieStatus" class="font-medium">
+                            <span class="text-gray-600">-</span>
+                        </span>
+                    </p>
+                    <p class="text-gray-600">用户: <span id="cookieUser" class="font-medium">-</span></p>
+                    <p class="text-gray-600">Cookie数量: <span id="cookieCount" class="font-medium">-</span></p>
+                    <p class="text-gray-600">最后检查时间: <span id="cookieLastCheck" class="font-medium">-</span></p>
+                </div>
             </div>
         </div>
     </div>
+    
 
     <!-- 日志查看器 -->
     <div class="bg-white shadow rounded-lg p-6">
