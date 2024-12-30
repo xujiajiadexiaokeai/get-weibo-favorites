@@ -20,6 +20,8 @@ FAVORITES_FILE = DATA_DIR / "favorites.json"
 DATABASE_FILE = DATA_DIR / "weibo_favorites.db"
 CRAWLER_STATE_FILE = DATA_DIR / "crawler_state.json"  # 新增：爬虫状态文件
 HISTORY_FILE = LOGS_DIR / "history.json"  # 新增：爬虫历史记录文件
+SCHEDULER_PID_FILE = DATA_DIR / "scheduler.pid"
+SCHEDULER_STATUS_FILE = DATA_DIR / "scheduler_status.json"
 
 # Weibo API configuration
 BASE_URL = "https://weibo.com/ajax/favorites/all_fav"
@@ -35,8 +37,6 @@ LOG_LEVEL = "INFO"
 CRAWL_INTERVAL = 3600  # 爬取间隔（秒）
 MAX_RETRIES = 1  # 最大重试次数
 RETRY_DELAY = 30  # 重试间隔（秒）
-SCHEDULER_PID_FILE = DATA_DIR / "scheduler.pid"
-SCHEDULER_STATUS_FILE = DATA_DIR / "scheduler_status.json"
 
 # Redis configuration
 REDIS_HOST = "localhost"

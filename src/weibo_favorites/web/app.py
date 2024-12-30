@@ -6,21 +6,31 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
 from .. import config
+from ..crawler.auth import CookieManager
 from ..crawler.run_history import RunLogger
 from ..crawler.scheduler import Scheduler
 from ..utils import LogManager
 
+# 加载 .env 文件
+load_dotenv()
+
 app = Flask(__name__)
-scheduler = Scheduler()
 
 # 设置Web应用日志
 logger = LogManager.setup_logger("web")
 
 # 添加模板函数
 app.jinja_env.globals.update(max=max, min=min)
+
+# 创建全局的调度器实例
+scheduler = Scheduler()
+
+# 创建全局的CookieManager实例
+cookie_manager = CookieManager()
 
 
 @app.template_filter("datetime")
@@ -177,15 +187,31 @@ def control_scheduler():
     return jsonify({"error": "Invalid action"}), 400
 
 
+@app.route("/api/cookie/status")
+def get_cookie_status():
+    """获取Cookie状态"""
+    return jsonify(cookie_manager.get_status())
+
+
 def run_web():
     """运行Web应用"""
-    # 确保日志目录存在
-    config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    # 确保日志和数据目录存在
+    os.makedirs(config.LOGS_DIR, exist_ok=True)
+    os.makedirs(config.DATA_DIR, exist_ok=True)
 
-    # 确保数据库文件所在目录存在
-    config.DATABASE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # cookie有效性检验
+    valid, error = cookie_manager.check_validity()
+    if not valid:
+        logger.warning(f"Cookie无效: {error}")
+    else:
+        logger.info("Cookie验证成功")
 
-    logger.info("启动Web应用")
+        # 自动启动调度器
+        if not scheduler.running:
+            # scheduler.start(cookie_manager)
+            logger.info("调度器已自动启动")
+
+    # 运行Flask应用
     app.run(host="0.0.0.0", port=5001, debug=True)
 
 

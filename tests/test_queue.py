@@ -1,8 +1,12 @@
 """队列测试模块"""
+import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+from dotenv import load_dotenv
 from rq.job import Job
 from rq.registry import FailedJobRegistry
 
@@ -29,6 +33,37 @@ def mock_queue():
 def ltp_queue(mock_redis, mock_queue):
     """创建队列管理器实例"""
     return LongTextProcessQueue()
+
+
+@pytest.fixture(scope="session")
+def load_env():
+    """加载环境变量，这个 fixture 只在测试会话开始时执行一次"""
+    # 获取项目根目录
+    root_dir = Path(__file__).parent.parent
+    dotenv_path = root_dir / ".env"
+
+    # 如果 .env 文件存在则加载它
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path)
+    else:
+        # 如果没有 .env 文件，设置必要的测试环境变量
+        os.environ.setdefault("WEIBO_UID", "test_uid")
+        os.environ.setdefault(
+            "WEIBO_COOKIES_FILE", str(root_dir / "tests/fixtures/test_cookies.json")
+        )
+
+
+@pytest.fixture(autouse=True)
+def setup_test_env(load_env):
+    """自动使用的 fixture，确保每个测试都在干净的环境中运行"""
+    # 保存当前环境变量
+    original_env = dict(os.environ)
+
+    yield
+
+    # 恢复原始环境变量
+    os.environ.clear()
+    os.environ.update(original_env)
 
 
 def test_unit_init_queue(mock_redis, mock_queue):
@@ -247,16 +282,42 @@ def test_unit_error_handling(ltp_queue: LongTextProcessQueue):
 #     assert status is not None
 #     assert status['queued'] >= 0  # 由于任务可能被立即执行，这里只检查状态获取是否正常
 
-# def test_integration_execute_task():
+# def test_integration_execute_task(load_env):
 #     """测试任务执行"""
 #     test_task = {
 #         "weibo_id": "5113072119974206",
 #         "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
-#         "is_long_text": True
+#         "is_long_text": True,
 #     }
 
-#     result = fetch_long_text(test_task)
-#     assert isinstance(result, dict)
-#     assert 'success' in result
-#     assert 'weibo_id' in result
-#     assert result['weibo_id'] == test_task['weibo_id']
+#     # 创建 mock session
+#     mock_session = MagicMock()
+#     mock_response = MagicMock()
+#     mock_response.json.return_value = {
+#         "data": {
+#             "longTextContent": "Open AI CEO 奥特曼分享了 9 本书。因为他长时间运营过一个风投培训营，所以他还是比 elon musk 这种成天装逼干活的，更愿意谈一些道理。。。",
+#             "url_struct": [],
+#         }
+#     }
+#     mock_session.get.return_value = mock_response
+
+#     # 使用 mock session 执行任务
+#     with patch(
+#         "weibo_favorites.crawler.auth.CookieManager.create_session",
+#         return_value=mock_session,
+#     ), patch(
+#         "weibo_favorites.crawler.auth.CookieManager.check_validity",
+#         return_value=(True, None),
+#     ), patch(
+#         "requests.get", return_value=mock_response
+#     ):
+#         result = fetch_long_text(test_task)
+
+#         # 验证结果
+#         assert isinstance(result, dict)
+#         assert result["success"] is True
+#         assert result["weibo_id"] == test_task["weibo_id"]
+#         assert "Open AI CEO 奥特曼分享了 9 本书" in result["content"]
+
+#         # 验证是否调用了requests.get
+#         requests.get.assert_called_once()

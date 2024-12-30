@@ -32,6 +32,7 @@ data/
 docs/
 logs/
 .DS_Store
+.env
 
 # Extensions
 *.todo

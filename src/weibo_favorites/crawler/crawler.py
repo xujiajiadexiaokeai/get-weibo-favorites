@@ -10,7 +10,6 @@ import requests
 from .. import config
 from ..database import save_weibo
 from ..utils import LogManager
-from .auth import create_session, load_cookies
 from .queue import LongTextProcessQueue
 
 # 设置日志记录器
@@ -66,12 +65,13 @@ def save_crawler_state(state: dict):
 
 
 def crawl_favorites(
-    cookies: List[Dict], ltp_queue: LongTextProcessQueue, page_number: int = 0
+    ltp_queue: LongTextProcessQueue,
+    session: requests.Session,
+    page_number: int = 0,
 ) -> List[Dict]:
     """爬取微博收藏
 
     Args:
-        cookies: cookies列表
         ltp_queue: 长文本处理队列
         page_number: 要爬取的页数，0表示爬取所有页或直到重复内容为止
 
@@ -84,9 +84,6 @@ def crawl_favorites(
     # 加载上次爬取状态
     state = load_crawler_state()
     last_id = state.get("last_id")
-
-    # 初始化session
-    session = create_session(cookies)
 
     try:
         while True:
@@ -137,7 +134,8 @@ def crawl_favorites(
         logger.error(traceback.format_exc())
 
     finally:
-        session.close()
+        if session is not None:
+            session.close()
 
         # 如果有新数据，更新状态
         if all_favorites:
@@ -252,14 +250,8 @@ def parse_weibo(data: Dict) -> Dict:
 def main():
     """主函数"""
     try:
-        # 加载cookies
-        cookies = load_cookies()
-        if not cookies:
-            logger.error("无法加载cookies，请先运行 get_weibo_cookies.py 获取cookies")
-            return
-
         # 获取收藏数据
-        favorites = crawl_favorites(cookies, LongTextProcessQueue())
+        favorites = crawl_favorites(LongTextProcessQueue())
         # 保存到数据库
         try:
             save_weibo(favorites)

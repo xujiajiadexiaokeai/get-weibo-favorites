@@ -1,0 +1,20 @@
+[
+    {
+        "name": "SUB",
+        "value": "test_sub_value",
+        "domain": ".weibo.com",
+        "path": "/",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "None"
+    },
+    {
+        "name": "WBPSESS",
+        "value": "test_session_value",
+        "domain": "weibo.com",
+        "path": "/",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "Lax"
+    }
+]

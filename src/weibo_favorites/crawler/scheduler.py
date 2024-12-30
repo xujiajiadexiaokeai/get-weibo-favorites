@@ -1,13 +1,15 @@
-"""调度器模块"""
+"""调度器模块，用于定时调度爬虫任务"""
+
 import json
-import os
+import threading
 import time
 from datetime import datetime, timedelta
+from typing import Optional
 
 from .. import config
 from ..database import save_weibo
 from ..utils import LogManager
-from .auth import load_cookies
+from .auth import CookieManager
 from .crawler import crawl_favorites
 from .queue import LongTextProcessQueue
 from .run_history import RunLogger
@@ -18,11 +20,16 @@ loggers = LogManager.setup_module_loggers()
 
 
 class Scheduler:
+    """调度器类"""
+
     def __init__(self):
-        self.interval = config.CRAWL_INTERVAL
+        """初始化调度器"""
         self.running = False
+        self.thread: Optional[threading.Thread] = None
+        self.next_run_time: Optional[datetime] = None
+        self.run_interval = config.CRAWL_INTERVAL
         self.run_logger = RunLogger()
-        self.next_run_time = None
+        self.last_update_time: Optional[datetime] = None
 
         # 进程间通信文件
         self.pid_file = config.SCHEDULER_PID_FILE
@@ -48,7 +55,7 @@ class Scheduler:
             self._cleanup_files()
             return False
 
-    def start(self):
+    def start(self, cookie_manager: CookieManager):
         """启动调度器"""
         if self.is_running():
             logger.warning("调度器已在运行中")
@@ -77,24 +84,24 @@ class Scheduler:
                     self._cleanup_queue()
                     last_cleanup_time = time.time()
 
-                # 检查 cookies
-                if not self.check_cookies():
-                    logger.error("cookies 不可用，请先手动登录")
+                # 验证cookie有效性
+                valid, error = cookie_manager.check_validity()
+                if not valid:
+                    logger.error(f"Cookie无效: {error}")
                     self.run_logger.update_run(
                         run_id,
                         status="error",
-                        error="cookies 不可用",
+                        error="Cookie无效",
                         end_time=datetime.now().isoformat(),
                     )
                     continue
 
-                # 加载 cookies
-                cookies = load_cookies()
-                logger.info("成功加载 cookies")
+                # 创建session
+                session = cookie_manager.create_session()
 
                 # 开始执行任务
                 logger.info("开始执行爬取任务")
-                favorites = crawl_favorites(cookies, self.ltp_queue)
+                favorites = crawl_favorites(self.ltp_queue, session)
 
                 if favorites:
                     # 保存到数据库
@@ -123,10 +130,12 @@ class Scheduler:
                 logger.info(f"本次任务耗时: {duration:.2f} 秒")
 
                 # 更新下次执行时间并等待
-                self.next_run_time = datetime.now() + timedelta(seconds=self.interval)
+                self.next_run_time = datetime.now() + timedelta(
+                    seconds=self.run_interval
+                )
                 self._update_status()
 
-                wait_time = self.interval - duration
+                wait_time = self.run_interval - duration
                 if wait_time > 0:
                     logger.info(f"等待 {wait_time:.2f} 秒后执行下一次任务")
                     time.sleep(wait_time)
@@ -143,7 +152,7 @@ class Scheduler:
                     error=str(e),
                     end_time=datetime.now().isoformat(),
                 )
-                time.sleep(self.interval)
+                time.sleep(self.run_interval)
 
             finally:
                 LogManager.cleanup_run_logging()
@@ -203,7 +212,7 @@ class Scheduler:
                 "running": False,
                 "current_time": datetime.now().isoformat(),
                 "next_run": None,
-                "interval": self.interval,
+                "interval": self.run_interval,
             }
 
         try:
@@ -216,7 +225,7 @@ class Scheduler:
                 "running": False,
                 "current_time": datetime.now().isoformat(),
                 "next_run": None,
-                "interval": self.interval,
+                "interval": self.run_interval,
             }
 
     def _update_status(self):
@@ -225,7 +234,7 @@ class Scheduler:
             "running": self.running,
             "current_time": datetime.now().isoformat(),
             "next_run": self.next_run_time.isoformat() if self.next_run_time else None,
-            "interval": self.interval,
+            "interval": self.run_interval,
         }
 
         try:
@@ -257,22 +266,18 @@ class Scheduler:
         except Exception as e:
             logger.error(f"清理状态文件失败: {e}")
 
-    def check_cookies(self) -> bool:
-        """检查 cookies 是否可用"""
-        cookies_file = config.COOKIES_FILE
-        return cookies_file.exists()
-
 
 def main():
     """主函数"""
     scheduler = Scheduler()
+    cookie_manager = CookieManager()
 
     if scheduler.is_running():
         print("调度器已在运行中")
         return
 
     try:
-        scheduler.start()
+        scheduler.start(cookie_manager)
     except KeyboardInterrupt:
         logger.info("收到终止信号，调度器停止运行")
     except Exception as e:
