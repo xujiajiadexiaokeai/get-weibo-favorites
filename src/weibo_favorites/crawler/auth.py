@@ -176,10 +176,10 @@ class CookieManager:
         Returns:
             Dict: 状态信息
         """
-        # 如果超过5分钟没有检查，重新检查有效性
+        # 如果超过20分钟没有检查，重新检查有效性
         if (
             not self.last_check_time
-            or datetime.now() - self.last_check_time > timedelta(minutes=5)
+            or datetime.now() - self.last_check_time > timedelta(minutes=20)
         ):
             self.check_validity()
 
