@@ -18,7 +18,7 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # 查询包含 URL 的数据
-cursor.execute("SELECT id, url FROM weibo_favorites")
+cursor.execute("SELECT id, url FROM weibo_favorites WHERE url != '' AND mblogid IS NULL")
 rows = cursor.fetchall()
 
 # 处理每一行数据并提取 id 字段
