@@ -46,6 +46,24 @@ def test_unit_parse_weibo():
             {"long_url": "http://example.com/1"},
             {"long_url": "http://example.com/2"},
         ],
+        "pic_ids": ["pic1", "pic2"],
+        "pic_num": 2,
+        "pic_infos": {
+            "pic1": {
+                "mw2000": {
+                    "url": "http://example.com/pic1.jpg",
+                    "width": 2000,
+                    "height": 1500
+                }
+            },
+            "pic2": {
+                "mw2000": {
+                    "url": "http://example.com/pic2.jpg",
+                    "width": 1800,
+                    "height": 1200
+                }
+            }
+        }
     }
 
     # 解析微博数据
@@ -63,6 +81,14 @@ def test_unit_parse_weibo():
     assert result["source"] == "iPhone客户端"
     assert len(result["links"]) == 2
     assert result["links"][0] == "http://example.com/1"
+
+    # 验证图片相关字段
+    assert result["pic_num"] == 2
+    assert len(result["pic_ids"]) == 2
+    assert result["pic_ids"] == ["pic1", "pic2"]
+    assert len(result["pic_infos"]) == 2
+    assert result["pic_infos"]["pic1"]["mw2000"]["url"] == "http://example.com/pic1.jpg"
+    assert result["pic_infos"]["pic2"]["mw2000"]["width"] == 1800
 
     # 验证URL格式
     assert result["url"] == "https://weibo.com/user123/abc123"
@@ -199,60 +225,78 @@ def test_unit_parse_weibo_time_edge_cases():
 
 
 @pytest.fixture
-def mock_queue():
-    """模拟长文本处理队列"""
-    queue = MagicMock()
-    queue.add_task.return_value = "job123"
-    queue.get_queue_status.return_value = {"pending": 1, "finished": 0}
-    return queue
+def mock_ltp_queue():
+    """Mock长文本处理队列"""
+    with patch("weibo_favorites.crawler.queue.LongTextProcessQueue") as mock:
+        mock_instance = MagicMock()
+        mock.return_value = mock_instance
+        yield mock_instance
+
+
+@pytest.fixture
+def mock_img_queue():
+    """Mock图片处理队列"""
+    with patch("weibo_favorites.crawler.queue.ImageProcessQueue") as mock:
+        mock_instance = MagicMock()
+        mock.return_value = mock_instance
+        yield mock_instance
 
 
 @pytest.fixture
 def mock_session():
-    """模拟会话对象"""
+    """Mock会话对象"""
     session = MagicMock(spec=requests.Session)
     return session
 
 
-def test_unit_crawl_favorites_basic(mock_queue, mock_session):
+def test_unit_crawl_favorites_basic(mock_ltp_queue, mock_img_queue, mock_session):
     """测试基本的收藏爬取功能"""
     # 准备测试数据
-    test_weibo = {
-        "idstr": "123456",
-        "mblogid": "abc123",
-        "created_at": "Sun Dec 01 12:09:53 +0800 2024",
-        "user": {"idstr": "user123", "screen_name": "TestUser"},
-        "isLongText": True,
-        "text_raw": "This is a test weibo",
+    mock_data = {
+        "data": [
+            {
+                "idstr": "123456",
+                "mblogid": "abc",
+                "isLongText": True,
+                "text_raw": "This is a test weibo",
+                "pic_num": 2,
+                "pic_ids": ["pic1", "pic2"],
+                "pic_infos": {
+                    "pic1": {"mw2000": {"url": "http://pic1.jpg", "width": 100, "height": 100}},
+                    "pic2": {"mw2000": {"url": "http://pic2.jpg", "width": 200, "height": 200}}
+                }
+            }
+        ]
     }
 
-    # 模拟get_favorites的返回值
-    mock_session.get.return_value.json.return_value = {"data": [test_weibo]}
+    # 设置模拟响应
+    mock_response = MagicMock()
+    mock_response.json.return_value = mock_data
+    mock_session.get.return_value = mock_response
 
     # 模拟文件操作
     state_data = {"last_id": None, "last_crawl_time": None}
     m = mock_open(read_data=json.dumps(state_data))
 
-    with patch("builtins.open", m), patch(
-        "weibo_favorites.crawler.crawler.save_weibo"
-    ) as mock_save_weibo:
-        # 执行爬取
-        result = crawl_favorites(
-            ltp_queue=mock_queue, session=mock_session, page_number=1
-        )
+    # 设置队列返回值
+    mock_ltp_queue.add_task.return_value = "job1"
+    mock_img_queue.add_task.return_value = ["job2", "job3"] # 返回多个ID
 
-        # 验证结果
-        assert len(result) == 1
-        assert result[0]["id"] == "123456"
-        assert result[0]["is_long_text"] == True
+    # 执行测试
+    with patch("builtins.open", m), patch("weibo_favorites.crawler.crawler.save_weibo") as mock_save_weibo:
+        result = crawl_favorites(mock_ltp_queue, mock_img_queue, mock_session, page_number=1)
 
-        # 验证函数调用
-        mock_session.get.assert_called_once()
-        mock_queue.add_task.assert_called_once()
-        mock_save_weibo.assert_called_once()
+    # 验证结果
+    assert len(result) == 1
+    assert result[0]["id"] == "123456"
+    assert result[0]["is_long_text"] == True
+    mock_ltp_queue.add_task.assert_called_once()
+    assert mock_img_queue.add_task.called
+    # 验证返回的任务ID列表
+    assert mock_img_queue.add_task.return_value == ["job2", "job3"]
 
 
-def test_unit_crawl_favorites_duplicate_check(mock_queue, mock_session):
+def test_unit_crawl_favorites_duplicate_check(mock_ltp_queue, mock_img_queue, mock_session):
     """测试重复内容检查功能"""
     # 准备测试数据
     test_weibos = [
@@ -278,9 +322,7 @@ def test_unit_crawl_favorites_duplicate_check(mock_queue, mock_session):
         "weibo_favorites.crawler.crawler.save_weibo"
     ) as mock_save_weibo:
         # 执行爬取
-        result = crawl_favorites(
-            ltp_queue=mock_queue, session=mock_session, page_number=1
-        )
+        result = crawl_favorites(mock_ltp_queue, mock_img_queue, mock_session, page_number=1)
 
         # 验证结果：应该只保存第一条微博
         assert len(result) == 1
@@ -290,43 +332,41 @@ def test_unit_crawl_favorites_duplicate_check(mock_queue, mock_session):
         assert mock_save_weibo.call_count == 1
 
 
-def test_unit_crawl_favorites_error_handling(mock_queue, mock_session):
+def test_unit_crawl_favorites_error_handling(mock_ltp_queue, mock_img_queue, mock_session):
     """测试错误处理"""
     # 模拟网络错误
     mock_session.get.side_effect = Exception("Network Error")
 
     with patch("builtins.open", mock_open(read_data="{}")):
         # 执行爬取
-        result = crawl_favorites(
-            ltp_queue=mock_queue, session=mock_session, page_number=1
-        )
+        result = crawl_favorites(mock_ltp_queue, mock_img_queue, mock_session, page_number=1)
 
         # 验证结果
         assert result == []
 
         # 验证队列操作未执行
-        mock_queue.add_task.assert_not_called()
+        mock_ltp_queue.add_task.assert_not_called()
+        mock_img_queue.add_task.assert_not_called()
 
 
-def test_unit_crawl_favorites_empty_response(mock_queue, mock_session):
+def test_unit_crawl_favorites_empty_response(mock_ltp_queue, mock_img_queue, mock_session):
     """测试空响应处理"""
     # 模拟空响应
     mock_session.get.return_value.json.return_value = {"data": []}
 
     with patch("builtins.open", mock_open(read_data="{}")):
         # 执行爬取
-        result = crawl_favorites(
-            ltp_queue=mock_queue, session=mock_session, page_number=1
-        )
+        result = crawl_favorites(mock_ltp_queue, mock_img_queue, mock_session, page_number=1)
 
         # 验证结果
         assert result == []
 
         # 验证队列操作未执行
-        mock_queue.add_task.assert_not_called()
+        mock_ltp_queue.add_task.assert_not_called()
+        mock_img_queue.add_task.assert_not_called()
 
 
-def test_unit_crawl_favorites_queue_error(mock_queue, mock_session):
+def test_unit_crawl_favorites_queue_error(mock_ltp_queue, mock_img_queue, mock_session):
     """测试队列错误处理"""
     # 准备测试数据
     test_weibo = {
@@ -334,25 +374,31 @@ def test_unit_crawl_favorites_queue_error(mock_queue, mock_session):
         "created_at": "Sun Dec 01 12:09:53 +0800 2024",
         "user": {"idstr": "user1", "screen_name": "User1"},
         "isLongText": True,
+        "pic_num": 1,
+        "pic_ids": ["pic1"],
+        "pic_infos": {
+            "pic1": {"mw2000": {"url": "http://pic1.jpg", "width": 100, "height": 100}}
+        }
     }
 
     # 模拟队列错误
-    mock_queue.add_task.side_effect = Exception("Queue Error")
+    mock_ltp_queue.add_task.side_effect = Exception("Queue Error")
+    mock_img_queue.add_task.side_effect = Exception("Queue Error")
+
     mock_session.get.return_value.json.return_value = {"data": [test_weibo]}
 
     with patch("builtins.open", mock_open(read_data="{}")), patch(
         "weibo_favorites.crawler.crawler.save_weibo"
     ) as mock_save_weibo:
         # 执行爬取
-        result = crawl_favorites(
-            ltp_queue=mock_queue, session=mock_session, page_number=1
-        )
+        result = crawl_favorites(mock_ltp_queue, mock_img_queue, mock_session, page_number=1)
 
-        # 验证结果：即使队列出错，也应该保存微博
-        assert len(result) == 1
-        assert result[0]["id"] == "123"
-        mock_save_weibo.assert_called_once()
-
+    # 验证结果：即使队列出错，也应该保存微博
+    assert len(result) == 1
+    assert result[0]["id"] == "123"
+    assert mock_ltp_queue.add_task.called
+    assert mock_img_queue.add_task.called
+    mock_save_weibo.assert_called_once()
 
 # TODO: 集成测试（暂时不测试，稍后修改）
 # @pytest.fixture

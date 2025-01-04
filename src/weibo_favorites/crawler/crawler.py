@@ -10,7 +10,7 @@ import requests
 from .. import config
 from ..database import save_weibo
 from ..utils import LogManager
-from .queue import LongTextProcessQueue
+from .queue import ImageProcessQueue, LongTextProcessQueue
 
 # 设置日志记录器
 logger = LogManager.setup_logger("crawler")
@@ -66,6 +66,7 @@ def save_crawler_state(state: dict):
 
 def crawl_favorites(
     ltp_queue: LongTextProcessQueue,
+    img_queue: ImageProcessQueue,
     session: requests.Session,
     page_number: int = 0,
 ) -> List[Dict]:
@@ -115,6 +116,14 @@ def crawl_favorites(
                         logger.info(f"已将长文本微博添加到队列，ID: {weibo['id']}, Job ID: {job_id}")
                     except Exception as e:
                         logger.error(f"添加长文本任务失败: {e}")
+
+                # 如果有图片，添加到队列
+                if weibo["pic_num"] > 0:
+                    try:
+                        job_id = img_queue.add_task(weibo)
+                        logger.info(f"已将图片微博添加到队列，ID: {weibo['id']}, Job ID: {job_id}")
+                    except Exception as e:
+                        logger.error(f"添加图片任务失败: {e}")
 
                 all_favorites.append(weibo)
                 # 保存到数据库
@@ -207,7 +216,7 @@ def parse_weibo(data: Dict) -> Dict:
     try:
         user = data.get("user", {}) or {}  # 确保user是字典
 
-        # 提取链接，如果url_struct不存在或为空，则返回空列表
+        # 提取附加链接，如果url_struct不存在或为空，则返回空列表
         links = []
         url_structs = data.get("url_struct", [])
         if url_structs and isinstance(url_structs, list):
@@ -230,6 +239,9 @@ def parse_weibo(data: Dict) -> Dict:
             "long_text": "",  # 需要后续从其他接口获取
             "source": safe_str(data.get("source")),
             "links": links,
+            "pic_ids": data.get("pic_ids", []),  # 添加图片ID列表
+            "pic_infos": data.get("pic_infos", {}),  # 添加原始图片信息
+            "pic_num": data.get("pic_num", 0),  # 添加图片数量
             "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "crawled": False,  # 标记是否已经爬取了完整内容
             "crawl_status": "pending"
