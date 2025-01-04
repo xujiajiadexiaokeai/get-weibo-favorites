@@ -45,6 +45,7 @@ REDIS_DB = 0
 
 # Queue configuration
 LONG_TEXT_CONTENT_PROCESS_QUEUE = "long_text_content_process"
+IMAGE_PROCESS_QUEUE = "image_content_process"  # 新增：图片处理队列名称
 MAX_RETRY_COUNT = 3  # 最大重试次数
 RETRY_DELAY = 300  # 重试延迟（秒）
 QUEUE_CLEANUP_INTERVAL = 86400  # 队列清理间隔（秒）

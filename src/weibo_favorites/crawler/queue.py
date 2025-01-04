@@ -1,9 +1,9 @@
 """
-队列模块，处理长文本微博的爬取队列
+队列模块，处理微博内容的爬取队列
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import redis
 import rq
@@ -13,16 +13,20 @@ from rq.registry import FailedJobRegistry, FinishedJobRegistry
 
 from .. import config
 from ..utils import LogManager
-from .tasks import fetch_long_text
+from .tasks import fetch_long_text, process_image_content
 
 logger = LogManager.setup_logger("queue")
 
 
-class LongTextProcessQueue:
-    """长文本处理队列"""
+class ProcessQueue:
+    """基础处理队列类"""
 
-    def __init__(self):
-        """初始化Redis连接和队列"""
+    def __init__(self, queue_name: str):
+        """初始化Redis连接和队列
+
+        Args:
+            queue_name: 队列名称
+        """
         try:
             # 初始化Redis连接
             self.redis = redis.Redis(
@@ -30,50 +34,16 @@ class LongTextProcessQueue:
             )
             # 初始化队列
             self.queue = rq.Queue(
-                name=config.LONG_TEXT_CONTENT_PROCESS_QUEUE, connection=self.redis
+                name=queue_name, connection=self.redis
             )
             # 初始化注册表
             self.failed_registry = FailedJobRegistry(queue=self.queue)
             self.finished_registry = FinishedJobRegistry(queue=self.queue)
 
-            logger.info("长文本处理队列初始化成功")
+            logger.info(f"{queue_name} 队列初始化成功")
         except Exception as e:
             logger.error(f"初始化Redis连接失败: {e}")
             raise
-
-    def add_task(self, weibo_data):
-        """添加长文本处理任务到队列
-
-        Args:
-            weibo_data (dict): 微博数据，包含 id, url 等信息
-        """
-        if not weibo_data.get("is_long_text"):
-            logger.info(f"微博 {weibo_data['id']} 不是长文本微博，不需要处理")
-            return
-
-        try:
-            task_data = {
-                "weibo_id": weibo_data["id"],
-                "url": config.LONG_TEXT_CONTENT_URL + weibo_data["mblogid"],
-                "retry_count": 0,
-                "status": "pending",
-                "created_at": datetime.now().isoformat(),
-            }
-
-            # 将任务加入队列
-            job = self.queue.enqueue(
-                fetch_long_text,
-                task_data,
-                job_timeout="10m",  # 设置任务超时时间为10分钟
-                retry=config.MAX_RETRY_COUNT,
-                retry_delay=config.RETRY_DELAY,
-            )
-
-            logger.info(f"已添加长文本处理任务: {task_data['weibo_id']}, job_id: {job.id}")
-            return job.id
-        except Exception as e:
-            logger.error(f"添加任务到队列失败: {e}")
-            return None
 
     def get_queue_status(self) -> Dict[str, Any]:
         """获取队列状态
@@ -213,3 +183,100 @@ class LongTextProcessQueue:
         except Exception as e:
             logger.error(f"获取任务状态失败: {e}")
             return None
+
+    def _enqueue_task(self, task_func, task_data: Dict[str, Any], job_timeout: str = "10m") -> Optional[str]:
+        """将任务加入队列
+
+        Args:
+            task_func: 任务处理函数
+            task_data: 任务数据
+            job_timeout: 任务超时时间
+
+        Returns:
+            任务ID
+        """
+        try:
+            job = self.queue.enqueue(
+                task_func,
+                task_data,
+                job_timeout=job_timeout,
+                retry=config.MAX_RETRY_COUNT,
+                retry_delay=config.RETRY_DELAY,
+            )
+            logger.info(f"已添加任务: {task_data.get('id', 'unknown')}, job_id: {job.id}")
+            return job.id
+        except Exception as e:
+            logger.error(f"添加任务到队列失败: {e}")
+            return None
+
+
+class LongTextProcessQueue(ProcessQueue):
+    """长文本处理队列"""
+
+    def __init__(self):
+        """初始化长文本处理队列"""
+        super().__init__(config.LONG_TEXT_CONTENT_PROCESS_QUEUE)
+
+    def add_task(self, weibo_data: Dict[str, Any]) -> Optional[str]:
+        """添加长文本处理任务到队列
+
+        Args:
+            weibo_data: 微博数据，包含 id, url 等信息
+
+        Returns:
+            任务ID
+        """
+        if not weibo_data.get("is_long_text"):
+            logger.info(f"微博 {weibo_data['id']} 不是长文本微博，不需要处理")
+            return None
+
+        task_data = {
+            "weibo_id": weibo_data["id"],
+            "url": config.LONG_TEXT_CONTENT_URL + weibo_data["mblogid"],
+            "retry_count": 0,
+            "status": "pending",
+            "created_at": datetime.now().isoformat(),
+        }
+
+        return self._enqueue_task(fetch_long_text, task_data)
+
+class ImageProcessQueue(ProcessQueue):
+    """图片处理队列"""
+
+    def __init__(self):
+        """初始化图片处理队列"""
+        super().__init__(config.IMAGE_PROCESS_QUEUE)
+
+    def add_task(self, weibo_data: Dict[str, Any]) -> List[str]:
+        """添加图片处理任务到队列
+
+        Args:
+            weibo_data: 微博数据，包含图片信息
+
+        Returns:
+            任务ID列表
+        """
+        job_ids = []
+        pic_infos = weibo_data.get("pic_infos", {})
+        
+        for pic_id, pic_info in pic_infos.items():
+            if "mw2000" not in pic_info:
+                continue
+
+            # 构建任务数据
+            task_data = {
+                "weibo_id": weibo_data["idstr"],
+                "pic_id": pic_id,
+                "url": pic_info["mw2000"]["url"],
+                "width": pic_info["mw2000"]["width"],
+                "height": pic_info["mw2000"]["height"],
+                "retry_count": 0,
+                "status": "pending",
+                "created_at": datetime.now().isoformat(),
+            }
+
+            job_id = self._enqueue_task(process_image_content, task_data)
+            if job_id:
+                job_ids.append(job_id)
+
+        return job_ids

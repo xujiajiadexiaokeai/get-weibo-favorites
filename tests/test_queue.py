@@ -11,8 +11,7 @@ from rq.job import Job
 from rq.registry import FailedJobRegistry
 
 from weibo_favorites import config
-from weibo_favorites.crawler.queue import LongTextProcessQueue
-from weibo_favorites.crawler.tasks import fetch_long_text
+from weibo_favorites.crawler.queue import ProcessQueue, LongTextProcessQueue, ImageProcessQueue
 
 
 @pytest.fixture
@@ -30,9 +29,21 @@ def mock_queue():
 
 
 @pytest.fixture
+def process_queue(mock_redis, mock_queue):
+    """创建基础处理队列实例"""
+    return ProcessQueue("test_queue")
+
+
+@pytest.fixture
 def ltp_queue(mock_redis, mock_queue):
-    """创建队列管理器实例"""
+    """创建长文本处理队列实例"""
     return LongTextProcessQueue()
+
+
+@pytest.fixture
+def image_queue(mock_redis, mock_queue):
+    """创建图片处理队列实例"""
+    return ImageProcessQueue()
 
 
 @pytest.fixture(scope="session")
@@ -66,258 +77,284 @@ def setup_test_env(load_env):
     os.environ.update(original_env)
 
 
-def test_unit_init_queue(mock_redis, mock_queue):
-    """测试队列初始化"""
-    ltp_queue = LongTextProcessQueue()
+class TestProcessQueue:
+    """基础处理队列测试类"""
 
-    # 验证Redis连接参数
-    mock_redis.assert_called_once_with(
-        host=config.REDIS_HOST, port=config.REDIS_PORT, db=config.REDIS_DB
-    )
+    def test_init_queue(self, mock_redis, mock_queue):
+        """测试队列初始化"""
+        queue_name = "test_queue"
+        process_queue = ProcessQueue(queue_name)
 
-    # 验证队列初始化
-    mock_queue.assert_called_once_with(
-        name=config.LONG_TEXT_CONTENT_PROCESS_QUEUE, connection=mock_redis.return_value
-    )
+        # 验证Redis连接参数
+        mock_redis.assert_called_once_with(
+            host=config.REDIS_HOST, port=config.REDIS_PORT, db=config.REDIS_DB
+        )
+
+        # 验证队列初始化
+        mock_queue.assert_called_once_with(
+            name=queue_name, connection=mock_redis.return_value
+        )
+
+    def test_get_queue_status(self, process_queue: ProcessQueue):
+        """测试获取队列状态"""
+        # Mock相关方法
+        process_queue.queue.__len__ = MagicMock(return_value=5)
+        process_queue.failed_registry.__len__ = MagicMock(return_value=2)
+        process_queue.finished_registry.__len__ = MagicMock(return_value=3)
+
+        mock_worker = MagicMock()
+        mock_worker.state = "busy"
+        mock_workers = [mock_worker, MagicMock()]
+        with patch("rq.Worker.all", return_value=mock_workers):
+            # 执行测试
+            status = process_queue.get_queue_status()
+
+        # 验证结果
+        assert status["queued_jobs"] == 5
+        assert status["failed_jobs"] == 2
+        assert status["finished_jobs"] == 3
+        assert status["active_workers"] == 1
+        assert status["total_workers"] == 2
+        assert "last_updated" in status
+
+    def test_get_job_status(self, process_queue: ProcessQueue):
+        """测试获取任务状态"""
+        # 准备测试数据
+        mock_job = MagicMock()
+        mock_job.id = "test_job_id"
+        mock_job.get_status.return_value = "finished"
+        mock_job.exc_info = None
+        mock_job.retries_left = 3
+        mock_job.enqueued_at = datetime.now()
+        mock_job.started_at = datetime.now()
+        mock_job.ended_at = datetime.now()
+        mock_job.result = {"success": True}
+
+        with patch("rq.job.Job.fetch", return_value=mock_job):
+            # 执行测试
+            status = process_queue.get_job_status("test_job_id")
+
+        # 验证结果
+        assert status["id"] == "test_job_id"
+        assert status["status"] == "finished"
+        assert status["error"] is None
+        assert status["retry_count"] == 3
+        assert "enqueued_at" in status
+        assert "started_at" in status
+        assert "ended_at" in status
+        assert status["result"] == {"success": True}
+
+    def test_retry_failed_jobs(self, process_queue: ProcessQueue):
+        """测试重试失败任务"""
+        # 准备测试数据：创建模拟的失败任务
+        mock_jobs = []
+        for i in range(2):
+            job = MagicMock()
+            job.id = f"failed_job_{i}"
+            job.retries_left = 2
+            mock_jobs.append(job)
+
+        # 设置失败注册表的job_ids
+        process_queue.failed_registry.get_job_ids = MagicMock(
+            return_value=[job.id for job in mock_jobs]
+        )
+
+        # 模拟Job.fetch方法
+        with patch("rq.job.Job.fetch", side_effect=mock_jobs):
+            # 执行测试
+            retry_count = process_queue.retry_failed_jobs()
+
+        # 验证结果
+        assert retry_count == len(mock_jobs)
+        assert process_queue.queue.enqueue_job.call_count == len(mock_jobs)
+
+    def test_cleanup_jobs(self, process_queue: ProcessQueue):
+        """测试清理过期任务"""
+        # 准备测试数据：创建模拟的过期任务
+        expired_time = datetime.now() - timedelta(days=8)  # 超过保留时间
+
+        mock_failed_jobs = []
+        for i in range(2):
+            job = MagicMock()
+            job.id = f"failed_job_{i}"
+            job.ended_at = expired_time
+            mock_failed_jobs.append(job)
+
+        mock_finished_jobs = []
+        for i in range(1):
+            job = MagicMock()
+            job.id = f"finished_job_{i}"
+            job.ended_at = expired_time
+            mock_finished_jobs.append(job)
+
+        # 设置注册表的job_ids
+        process_queue.failed_registry.get_job_ids = MagicMock(
+            return_value=[job.id for job in mock_failed_jobs]
+        )
+        process_queue.finished_registry.get_job_ids = MagicMock(
+            return_value=[job.id for job in mock_finished_jobs]
+        )
+
+        # 模拟Job.fetch方法
+        all_jobs = mock_failed_jobs + mock_finished_jobs
+        with patch("rq.job.Job.fetch", side_effect=all_jobs):
+            # 执行测试
+            result = process_queue.cleanup_jobs()
+
+        # 验证结果
+        assert result["failed_jobs_cleaned"] == len(mock_failed_jobs)
+        assert result["finished_jobs_cleaned"] == len(mock_finished_jobs)
+
+    def test_error_handling(self, process_queue: ProcessQueue):
+        """测试错误处理场景"""
+        # 测试Redis连接错误
+        process_queue.redis.ping.side_effect = Exception("Redis connection error")
+        status = process_queue.get_queue_status()
+        assert "error" in status
+        assert "Redis connection error" in status["error"]
+
+        # 测试获取失败任务详情时的错误
+        process_queue.redis.ping.side_effect = None
+        process_queue.failed_registry.get_job_ids = MagicMock(return_value=["invalid_job_id"])
+        with patch("rq.job.Job.fetch", side_effect=Exception("Job fetch error")):
+            status = process_queue.get_queue_status()
+            assert len(status["failed_jobs_details"]) == 0
 
 
-def test_unit_add_task(ltp_queue: LongTextProcessQueue):
-    """测试添加任务"""
-    # 准备测试数据
-    weibo_data = {"id": "123456", "mblogid": "abc123", "is_long_text": True}
+class TestLongTextProcessQueue:
+    """长文本处理队列测试类"""
 
-    # Mock队列的enqueue方法
-    mock_job = MagicMock()
-    mock_job.id = "test_job_id"
-    ltp_queue.queue.enqueue = MagicMock(return_value=mock_job)
+    def test_add_task(self, ltp_queue: LongTextProcessQueue):
+        """测试添加任务"""
+        # 准备测试数据
+        weibo_data = {"id": "123456", "mblogid": "abc123", "is_long_text": True}
 
-    # 执行测试
-    job_id = ltp_queue.add_task(weibo_data)
+        # Mock队列的enqueue方法
+        mock_job = MagicMock()
+        mock_job.id = "test_job_id"
+        ltp_queue.queue.enqueue = MagicMock(return_value=mock_job)
 
-    # 验证结果
-    assert job_id == "test_job_id"
-    ltp_queue.queue.enqueue.assert_called_once()
-
-
-def test_unit_add_task_not_long_text(ltp_queue: LongTextProcessQueue):
-    """测试添加非长文本任务"""
-    # 准备测试数据
-    weibo_data = {"id": "123456", "mblogid": "abc123", "is_long_text": False}
-
-    # Mock队列的enqueue方法
-    ltp_queue.queue.enqueue = MagicMock()
-
-    # 执行测试
-    job_id = ltp_queue.add_task(weibo_data)
-
-    # 验证结果
-    assert job_id is None
-    ltp_queue.queue.enqueue.assert_not_called()
-
-
-def test_unit_get_queue_status(ltp_queue: LongTextProcessQueue):
-    """测试获取队列状态"""
-    # Mock相关方法
-    ltp_queue.queue.__len__ = MagicMock(return_value=5)
-    ltp_queue.failed_registry.__len__ = MagicMock(return_value=2)
-    ltp_queue.finished_registry.__len__ = MagicMock(return_value=3)
-
-    mock_worker = MagicMock()
-    mock_worker.state = "busy"
-    mock_workers = [mock_worker, MagicMock()]
-    with patch("rq.Worker.all", return_value=mock_workers):
         # 执行测试
-        status = ltp_queue.get_queue_status()
+        job_id = ltp_queue.add_task(weibo_data)
 
-    # 验证结果
-    assert status["queued_jobs"] == 5
-    assert status["failed_jobs"] == 2
-    assert status["finished_jobs"] == 3
-    assert status["active_workers"] == 1
-    assert status["total_workers"] == 2
-    assert "last_updated" in status
+        # 验证结果
+        assert job_id == "test_job_id"
+        ltp_queue.queue.enqueue.assert_called_once()
 
+    def test_add_task_not_long_text(self, ltp_queue: LongTextProcessQueue):
+        """测试添加非长文本任务"""
+        # 准备测试数据
+        weibo_data = {"id": "123456", "mblogid": "abc123", "is_long_text": False}
 
-def test_unit_retry_failed_jobs(ltp_queue: LongTextProcessQueue):
-    """测试重试失败任务"""
-    # 准备测试数据：创建模拟的失败任务
-    mock_jobs = []
-    for i in range(2):
-        job = MagicMock()
-        job.id = f"failed_job_{i}"
-        job.retries_left = 2
-        mock_jobs.append(job)
+        # Mock队列的enqueue方法
+        ltp_queue.queue.enqueue = MagicMock()
 
-    # 设置失败注册表的job_ids
-    ltp_queue.failed_registry.get_job_ids = MagicMock(
-        return_value=[job.id for job in mock_jobs]
-    )
-
-    # 模拟Job.fetch方法
-    with patch("rq.job.Job.fetch", side_effect=mock_jobs):
         # 执行测试
-        retry_count = ltp_queue.retry_failed_jobs()
+        job_id = ltp_queue.add_task(weibo_data)
 
-    # 验证结果
-    assert retry_count == len(mock_jobs)
-    assert ltp_queue.queue.enqueue_job.call_count == len(mock_jobs)
+        # 验证结果
+        assert job_id is None
+        ltp_queue.queue.enqueue.assert_not_called()
 
 
-def test_unit_cleanup_jobs(ltp_queue: LongTextProcessQueue):
-    """测试清理过期任务"""
-    # 准备测试数据：创建模拟的过期任务
-    expired_time = datetime.now() - timedelta(days=8)  # 超过保留时间
+class TestImageProcessQueue:
+    """图片处理队列测试类"""
 
-    mock_failed_jobs = []
-    for i in range(2):
-        job = MagicMock()
-        job.id = f"failed_job_{i}"
-        job.ended_at = expired_time
-        mock_failed_jobs.append(job)
+    def test_add_task_with_images(self, image_queue: ImageProcessQueue):
+        """测试添加带图片的任务"""
+        # 准备测试数据
+        weibo_data = {
+            "idstr": "123456",
+            "pic_ids": ["pic1", "pic2"],
+            "pic_infos": {
+                "pic1": {"mw2000": {
+                    "url": "http://example.com/pic1.jpg",
+                    "width": 2000,
+                    "height": 1500
+                }},
+                "pic2": {"mw2000": {
+                    "url": "http://example.com/pic2.jpg",
+                    "width": 2000,
+                    "height": 1500
+                }}
+            }
+        }
 
-    mock_finished_jobs = []
-    for i in range(1):
-        job = MagicMock()
-        job.id = f"finished_job_{i}"
-        job.ended_at = expired_time
-        mock_finished_jobs.append(job)
+        # Mock队列的enqueue方法
+        mock_job = MagicMock()
+        mock_job.id = "test_job_id"
+        image_queue.queue.enqueue = MagicMock(return_value=mock_job)
 
-    # 设置注册表的job_ids
-    ltp_queue.failed_registry.get_job_ids = MagicMock(
-        return_value=[job.id for job in mock_failed_jobs]
-    )
-    ltp_queue.finished_registry.get_job_ids = MagicMock(
-        return_value=[job.id for job in mock_finished_jobs]
-    )
-
-    # 模拟Job.fetch方法
-    all_jobs = mock_failed_jobs + mock_finished_jobs
-    with patch("rq.job.Job.fetch", side_effect=all_jobs):
         # 执行测试
-        result = ltp_queue.cleanup_jobs()
+        job_ids = image_queue.add_task(weibo_data)
 
-    # 验证结果
-    assert result["failed_jobs_cleaned"] == len(mock_failed_jobs)
-    assert result["finished_jobs_cleaned"] == len(mock_finished_jobs)
-    # 验证每个任务都被删除了
-    for job in all_jobs:
-        job.delete.assert_called_once()
+        # 验证结果
+        assert len(job_ids) == 2
+        assert all(job_id == "test_job_id" for job_id in job_ids)
+        assert image_queue.queue.enqueue.call_count == 2
 
+    def test_add_task_no_images(self, image_queue: ImageProcessQueue):
+        """测试添加无图片的任务"""
+        # 准备测试数据
+        weibo_data = {
+            "idstr": "123456",
+            "pic_ids": [],
+            "pic_infos": {}
+        }
 
-def test_unit_get_job_status(ltp_queue: LongTextProcessQueue):
-    """测试获取任务状态"""
-    # 准备测试数据
-    mock_job = MagicMock()
-    mock_job.id = "test_job_id"
-    mock_job.get_status.return_value = "finished"
-    mock_job.exc_info = None
-    mock_job.retries_left = 3
-    mock_job.enqueued_at = datetime.now()
-    mock_job.started_at = datetime.now()
-    mock_job.ended_at = datetime.now()
-    mock_job.result = {"success": True}
+        # Mock队列的enqueue方法
+        image_queue.queue.enqueue = MagicMock()
 
-    with patch("rq.job.Job.fetch", return_value=mock_job):
         # 执行测试
-        status = ltp_queue.get_job_status("test_job_id")
+        job_ids = image_queue.add_task(weibo_data)
 
-    # 验证结果
-    assert status["id"] == "test_job_id"
-    assert status["status"] == "finished"
-    assert status["error"] is None
-    assert status["retry_count"] == 3
-    assert "enqueued_at" in status
-    assert "started_at" in status
-    assert "ended_at" in status
-    assert status["result"] == {"success": True}
+        # 验证结果
+        assert len(job_ids) == 0
+        image_queue.queue.enqueue.assert_not_called()
 
+    def test_add_task_missing_mw2000(self, image_queue: ImageProcessQueue):
+        """测试添加缺少mw2000尺寸的图片任务"""
+        # 准备测试数据
+        weibo_data = {
+            "idstr": "123456",
+            "pic_ids": ["pic1", "pic2"],
+            "pic_infos": {
+                "pic1": {"mw2000": {
+                    "url": "http://example.com/pic1.jpg",
+                    "width": 2000,
+                    "height": 1500
+                }},
+                "pic2": {"thumbnail": {"url": "http://example.com/pic2_thumb.jpg"}}  # 缺少mw2000
+            }
+        }
 
-def test_unit_error_handling(ltp_queue: LongTextProcessQueue):
-    """测试错误处理场景"""
-    # 场景1：Redis连接失败
-    ltp_queue.redis.ping = MagicMock(side_effect=Exception("Connection failed"))
+        # Mock队列的enqueue方法
+        mock_job = MagicMock()
+        mock_job.id = "test_job_id"
+        image_queue.queue.enqueue = MagicMock(return_value=mock_job)
 
-    # 测试获取队列状态时的错误处理
-    status = ltp_queue.get_queue_status()
-    assert "error" in status
-    assert "Connection failed" in status["error"]
-    assert "last_updated" in status
-    assert len(status.keys()) == 2  # 只应包含 error 和 last_updated
+        # 执行测试
+        job_ids = image_queue.add_task(weibo_data)
 
-    # 场景2：队列操作失败
-    weibo_data = {"id": "123", "mblogid": "abc123", "is_long_text": True}
-    ltp_queue.queue.enqueue = MagicMock(side_effect=Exception("Enqueue failed"))
-    job_id = ltp_queue.add_task(weibo_data)
-    assert job_id is None
+        # 验证结果
+        assert len(job_ids) == 1  # 只有一张图片有mw2000尺寸
+        assert job_ids[0] == "test_job_id"
+        image_queue.queue.enqueue.assert_called_once()
 
-    # 场景3：获取失败任务详情时出错
-    ltp_queue.redis.ping = MagicMock()  # 重置 ping 方法
-    ltp_queue.failed_registry.get_job_ids = MagicMock(return_value=["job1"])
-    Job.fetch = MagicMock(side_effect=Exception("Failed to fetch job"))
-    FailedJobRegistry.get_job_count = MagicMock(return_value=1)  # 模拟返回一个失败任务
-    status = ltp_queue.get_queue_status()
-    assert "failed_jobs_details" in status
-    assert status["failed_jobs"] == 1
-    assert len(status["failed_jobs_details"]) == 0  # 由于获取失败，列表应为空
-    assert "error" not in status  # 单个任务获取失败不应影响整体状态
+    def test_add_task_invalid_data(self, image_queue: ImageProcessQueue):
+        """测试添加无效数据的任务"""
+        # 准备测试数据
+        invalid_data = {
+            "idstr": "123456",
+            # 缺少必要的字段
+        }
 
+        # Mock队列的enqueue方法
+        image_queue.queue.enqueue = MagicMock()
 
-# TODO: 集成测试(暂时不测试,稍后修改)
-# def test_integration_add_task(ltp_queue: LongTextProcessQueue):
-#     """测试添加任务到队列"""
-#     test_weibo = {
-#         "weibo_id": "5113072119974206",
-#         "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
-#         "is_long_text": True
-#     }
+        # 执行测试
+        job_ids = image_queue.add_task(invalid_data)
 
-#     # 清空队列
-#     ltp_queue.queue.empty()
-
-#     job_id = ltp_queue.add_task(test_weibo)
-#     assert job_id is not None
-
-#     # 检查队列状态
-#     status = ltp_queue.get_queue_status()
-#     assert status is not None
-#     assert status['queued'] >= 0  # 由于任务可能被立即执行，这里只检查状态获取是否正常
-
-# def test_integration_execute_task(load_env):
-#     """测试任务执行"""
-#     test_task = {
-#         "weibo_id": "5113072119974206",
-#         "url": "https://weibo.com/ajax/statuses/longtext?id=P5u43FQKi",
-#         "is_long_text": True,
-#     }
-
-#     # 创建 mock session
-#     mock_session = MagicMock()
-#     mock_response = MagicMock()
-#     mock_response.json.return_value = {
-#         "data": {
-#             "longTextContent": "Open AI CEO 奥特曼分享了 9 本书。因为他长时间运营过一个风投培训营，所以他还是比 elon musk 这种成天装逼干活的，更愿意谈一些道理。。。",
-#             "url_struct": [],
-#         }
-#     }
-#     mock_session.get.return_value = mock_response
-
-#     # 使用 mock session 执行任务
-#     with patch(
-#         "weibo_favorites.crawler.auth.CookieManager.create_session",
-#         return_value=mock_session,
-#     ), patch(
-#         "weibo_favorites.crawler.auth.CookieManager.check_validity",
-#         return_value=(True, None),
-#     ), patch(
-#         "requests.get", return_value=mock_response
-#     ):
-#         result = fetch_long_text(test_task)
-
-#         # 验证结果
-#         assert isinstance(result, dict)
-#         assert result["success"] is True
-#         assert result["weibo_id"] == test_task["weibo_id"]
-#         assert "Open AI CEO 奥特曼分享了 9 本书" in result["content"]
-
-#         # 验证是否调用了requests.get
-#         requests.get.assert_called_once()
+        # 验证结果
+        assert len(job_ids) == 0
+        image_queue.queue.enqueue.assert_not_called()
