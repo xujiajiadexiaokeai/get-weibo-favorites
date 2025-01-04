@@ -267,31 +267,50 @@ class TestImageProcessQueue:
             "idstr": "123456",
             "pic_ids": ["pic1", "pic2"],
             "pic_infos": {
-                "pic1": {"mw2000": {
-                    "url": "http://example.com/pic1.jpg",
-                    "width": 2000,
-                    "height": 1500
-                }},
-                "pic2": {"mw2000": {
-                    "url": "http://example.com/pic2.jpg",
-                    "width": 2000,
-                    "height": 1500
-                }}
+                "pic1": {
+                    "mw2000": {
+                        "url": "http://example.com/pic1.jpg",
+                        "width": 2000,
+                        "height": 1500
+                    }
+                },
+                "pic2": {
+                    "mw2000": {
+                        "url": "http://example.com/pic2.jpg",
+                        "width": 2000,
+                        "height": 1500
+                    }
+                }
             }
         }
 
         # Mock队列的enqueue方法
         mock_job = MagicMock()
         mock_job.id = "test_job_id"
-        image_queue.queue.enqueue = MagicMock(return_value=mock_job)
+        image_queue._enqueue_task = MagicMock(return_value=mock_job)
 
         # 执行测试
         job_ids = image_queue.add_task(weibo_data)
 
         # 验证结果
+        assert isinstance(job_ids, list)
         assert len(job_ids) == 2
-        assert all(job_id == "test_job_id" for job_id in job_ids)
-        assert image_queue.queue.enqueue.call_count == 2
+        assert all(isinstance(job_id, str) for job_id in job_ids)
+        assert image_queue._enqueue_task.call_count == 2
+
+        # 验证任务数据
+        calls = image_queue._enqueue_task.call_args_list
+        for i, call in enumerate(calls):
+            args, kwargs = call
+            task_data = args[1]  # 第二个参数是task_data
+            assert task_data["weibo_id"] == "123456"
+            assert task_data["pic_id"] == f"pic{i+1}"
+            assert task_data["url"] == f"http://example.com/pic{i+1}.jpg"
+            assert task_data["width"] == 2000
+            assert task_data["height"] == 1500
+            assert task_data["retry_count"] == 0
+            assert task_data["status"] == "pending"
+            assert isinstance(task_data["created_at"], str)
 
     def test_add_task_no_images(self, image_queue: ImageProcessQueue):
         """测试添加无图片的任务"""
@@ -303,14 +322,15 @@ class TestImageProcessQueue:
         }
 
         # Mock队列的enqueue方法
-        image_queue.queue.enqueue = MagicMock()
+        image_queue._enqueue_task = MagicMock()
 
         # 执行测试
         job_ids = image_queue.add_task(weibo_data)
 
         # 验证结果
+        assert isinstance(job_ids, list)
         assert len(job_ids) == 0
-        image_queue.queue.enqueue.assert_not_called()
+        image_queue._enqueue_task.assert_not_called()
 
     def test_add_task_missing_mw2000(self, image_queue: ImageProcessQueue):
         """测试添加缺少mw2000尺寸的图片任务"""
@@ -319,42 +339,93 @@ class TestImageProcessQueue:
             "idstr": "123456",
             "pic_ids": ["pic1", "pic2"],
             "pic_infos": {
-                "pic1": {"mw2000": {
-                    "url": "http://example.com/pic1.jpg",
-                    "width": 2000,
-                    "height": 1500
-                }},
-                "pic2": {"thumbnail": {"url": "http://example.com/pic2_thumb.jpg"}}  # 缺少mw2000
+                "pic1": {
+                    "mw2000": {
+                        "url": "http://example.com/pic1.jpg",
+                        "width": 2000,
+                        "height": 1500
+                    }
+                },
+                "pic2": {
+                    "thumbnail": {
+                        "url": "http://example.com/pic2_thumb.jpg"
+                    }
+                }  # 缺少mw2000
             }
         }
 
         # Mock队列的enqueue方法
         mock_job = MagicMock()
         mock_job.id = "test_job_id"
-        image_queue.queue.enqueue = MagicMock(return_value=mock_job)
+        image_queue._enqueue_task = MagicMock(return_value=mock_job)
 
         # 执行测试
         job_ids = image_queue.add_task(weibo_data)
 
         # 验证结果
+        assert isinstance(job_ids, list)
         assert len(job_ids) == 1  # 只有一张图片有mw2000尺寸
         assert job_ids[0] == "test_job_id"
-        image_queue.queue.enqueue.assert_called_once()
+        
+        # 验证任务数据
+        image_queue._enqueue_task.assert_called_once()
+        args, kwargs = image_queue._enqueue_task.call_args
+        task_data = args[1]  # 第二个参数是task_data
+        assert task_data["pic_id"] == "pic1"
+        assert task_data["url"] == "http://example.com/pic1.jpg"
 
     def test_add_task_invalid_data(self, image_queue: ImageProcessQueue):
         """测试添加无效数据的任务"""
-        # 准备测试数据
-        invalid_data = {
-            "idstr": "123456",
-            # 缺少必要的字段
-        }
+        invalid_test_cases = [
+            {
+                "desc": "缺少必要的字段",
+                "data": {
+                    "idstr": "123456"
+                }
+            },
+            {
+                "desc": "pic_ids和pic_infos不匹配",
+                "data": {
+                    "idstr": "123456",
+                    "pic_ids": ["pic1"],
+                    "pic_infos": {
+                        "pic2": {
+                            "mw2000": {
+                                "url": "http://example.com/pic2.jpg",
+                                "width": 2000,
+                                "height": 1500
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "desc": "mw2000缺少必要属性",
+                "data": {
+                    "idstr": "123456",
+                    "pic_ids": ["pic1"],
+                    "pic_infos": {
+                        "pic1": {
+                            "mw2000": {
+                                "url": "http://example.com/pic1.jpg"
+                                # 缺少width和height
+                            }
+                        }
+                    }
+                }
+            }
+        ]
 
         # Mock队列的enqueue方法
-        image_queue.queue.enqueue = MagicMock()
+        image_queue._enqueue_task = MagicMock()
 
-        # 执行测试
-        job_ids = image_queue.add_task(invalid_data)
+        for test_case in invalid_test_cases:
+            # 执行测试
+            job_ids = image_queue.add_task(test_case["data"])
 
-        # 验证结果
-        assert len(job_ids) == 0
-        image_queue.queue.enqueue.assert_not_called()
+            # 验证结果
+            assert isinstance(job_ids, list), f"Failed case: {test_case['desc']}"
+            assert len(job_ids) == 0, f"Failed case: {test_case['desc']}"
+
+        # 验证没有任务被添加
+        image_queue._enqueue_task.assert_not_called()

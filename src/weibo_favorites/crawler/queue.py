@@ -257,26 +257,42 @@ class ImageProcessQueue(ProcessQueue):
             任务ID列表
         """
         job_ids = []
+
         pic_infos = weibo_data.get("pic_infos", {})
-        
-        for pic_id, pic_info in pic_infos.items():
-            if "mw2000" not in pic_info:
+        pic_ids = weibo_data.get("pic_ids", [])
+
+        for pic_id in pic_ids:
+            pic_info = pic_infos.get(pic_id)
+            if not pic_info:
+                logger.warning(f"图片 {pic_id} 信息不完整")
+                continue
+
+            # 检查是否有mw2000尺寸的图片信息
+            mw2000 = pic_info.get("mw2000")
+            if not mw2000:
+                logger.warning(f"图片 {pic_id} 缺少mw2000尺寸")
+                continue
+
+            # 检查必要的图片属性
+            if not all(key in mw2000 for key in ["url", "width", "height"]):
+                logger.warning(f"图片 {pic_id} mw2000尺寸信息不完整")
                 continue
 
             # 构建任务数据
             task_data = {
                 "weibo_id": weibo_data["idstr"],
                 "pic_id": pic_id,
-                "url": pic_info["mw2000"]["url"],
-                "width": pic_info["mw2000"]["width"],
-                "height": pic_info["mw2000"]["height"],
+                "url": mw2000["url"],
+                "width": mw2000["width"],
+                "height": mw2000["height"],
                 "retry_count": 0,
                 "status": "pending",
                 "created_at": datetime.now().isoformat(),
             }
 
-            job_id = self._enqueue_task(process_image_content, task_data)
-            if job_id:
-                job_ids.append(job_id)
+            job = self._enqueue_task(process_image_content, task_data)
+            if job:
+                job_ids.append(job.id)
+                logger.info(f"已添加图片处理任务: {pic_id}, job_id: {job.id}")
 
         return job_ids
