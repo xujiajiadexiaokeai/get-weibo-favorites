@@ -1,6 +1,7 @@
 """调度器模块，用于定时调度爬虫任务"""
 
 import json
+import os
 import threading
 import time
 from datetime import datetime, timedelta
@@ -11,7 +12,7 @@ from ..database import save_weibo
 from ..utils import LogManager
 from .auth import CookieManager
 from .crawler import crawl_favorites
-from .queue import LongTextProcessQueue
+from .queue import ImageProcessQueue, LongTextProcessQueue
 from .run_history import RunLogger
 
 # 设置日志记录器
@@ -37,6 +38,7 @@ class Scheduler:
 
         # 初始化队列管理器
         self.ltp_queue = LongTextProcessQueue()
+        self.img_queue = ImageProcessQueue()
 
     def is_running(self):
         """检查调度器是否在运行"""
@@ -94,36 +96,35 @@ class Scheduler:
                         error="Cookie无效",
                         end_time=datetime.now().isoformat(),
                     )
-                    continue
-
-                # 创建session
-                session = cookie_manager.create_session()
-
-                # 开始执行任务
-                logger.info("开始执行爬取任务")
-                favorites = crawl_favorites(self.ltp_queue, session)
-
-                if favorites:
-                    # 保存到数据库
-                    save_weibo(favorites)
-                    logger.info(f"成功保存 {len(favorites)} 条收藏到数据库")
-                    logger.info(f"任务完成，成功爬取并保存 {len(favorites)} 条收藏")
-
-                    # 更新运行记录
-                    self.run_logger.update_run(
-                        run_id,
-                        status="success",
-                        items_count=len(favorites),
-                        end_time=datetime.now().isoformat(),
-                    )
                 else:
-                    logger.warning("任务完成，但未获取到数据")
-                    self.run_logger.update_run(
-                        run_id,
-                        status="warning",
-                        items_count=0,
-                        end_time=datetime.now().isoformat(),
-                    )
+                    # 创建session
+                    session = cookie_manager.create_session()
+
+                    # 开始执行任务
+                    logger.info("开始执行爬取任务")
+                    favorites = crawl_favorites(self.ltp_queue, self.img_queue, session)
+
+                    if favorites:
+                        # 保存到数据库
+                        save_weibo(favorites)
+                        logger.info(f"成功保存 {len(favorites)} 条收藏到数据库")
+                        logger.info(f"任务完成，成功爬取并保存 {len(favorites)} 条收藏")
+
+                        # 更新运行记录
+                        self.run_logger.update_run(
+                            run_id,
+                            status="success",
+                            items_count=len(favorites),
+                            end_time=datetime.now().isoformat(),
+                        )
+                    else:
+                        logger.warning("任务完成，但未获取到数据")
+                        self.run_logger.update_run(
+                            run_id,
+                            status="warning",
+                            items_count=0,
+                            end_time=datetime.now().isoformat(),
+                        )
 
                 # 计算耗时
                 duration = time.time() - start_time
@@ -164,6 +165,14 @@ class Scheduler:
         """停止调度器"""
         if not self.is_running():
             return False
+        
+        # # 获取队列最终状态
+        # final_status = {
+        #     "long_text_queue": self.ltp_queue.get_queue_status(),
+        #     "image_queue": self.img_queue.get_queue_status(),
+        #     "stopped_at": datetime.now().isoformat()
+        # }
+        # logger.info("队列最终状态: %s", final_status)
 
         try:
             with open(self.pid_file) as f:
@@ -205,6 +214,84 @@ class Scheduler:
             self._cleanup_files()
             return True
 
+    def check_queue_status(self):
+        """检查队列状态"""
+        # 检查长文本处理队列状态
+        ltp_status = self.ltp_queue.get_queue_status()
+        logger.info("长文本处理队列状态: %s", ltp_status)
+
+        # 检查图片处理队列状态
+        img_status = self.img_queue.get_queue_status()
+        logger.info("图片处理队列状态: %s", img_status)
+
+        # 如果两个队列都没有活跃的worker，可能需要报警
+        if ltp_status["active_workers"] == 0 and img_status["active_workers"] == 0:
+            logger.warning("没有活跃的worker，请检查队列状态")
+
+        return {
+            "long_text_queue": ltp_status,
+            "image_queue": img_status,
+            "last_checked": datetime.now().isoformat()
+        }
+
+    def cleanup_queues(self):
+        """清理队列中的过期任务"""
+        result = {
+            "long_text_cleaned": 0,
+            "image_cleaned": 0,
+            "cleaned_at": datetime.now().isoformat(),
+            "errors": []
+        }
+
+        try:
+            # 清理长文本处理队列
+            result["long_text_cleaned"] = self.ltp_queue.cleanup_jobs()
+            logger.info("长文本处理队列清理完成，共清理 %d 个任务", result["long_text_cleaned"])
+        except Exception as e:
+            error_msg = f"长文本处理队列清理失败: {str(e)}"
+            logger.error(error_msg)
+            result["errors"].append(error_msg)
+
+        try:
+            # 清理图片处理队列
+            result["image_cleaned"] = self.img_queue.cleanup_jobs()
+            logger.info("图片处理队列清理完成，共清理 %d 个任务", result["image_cleaned"])
+        except Exception as e:
+            error_msg = f"图片处理队列清理失败: {str(e)}"
+            logger.error(error_msg)
+            result["errors"].append(error_msg)
+
+        return result
+
+    def retry_failed_jobs(self):
+        """重试失败的任务"""
+        result = {
+            "long_text_retried": 0,
+            "image_retried": 0,
+            "retried_at": datetime.now().isoformat(),
+            "errors": []
+        }
+
+        try:
+            # 重试长文本处理队列中的失败任务
+            result["long_text_retried"] = self.ltp_queue.retry_failed_jobs()
+            logger.info("长文本处理队列重试完成，共重试 %d 个任务", result["long_text_retried"])
+        except Exception as e:
+            error_msg = f"长文本处理队列重试失败: {str(e)}"
+            logger.error(error_msg)
+            result["errors"].append(error_msg)
+
+        try:
+            # 重试图片处理队列中的失败任务
+            result["image_retried"] = self.img_queue.retry_failed_jobs()
+            logger.info("图片处理队列重试完成，共重试 %d 个任务", result["image_retried"])
+        except Exception as e:
+            error_msg = f"图片处理队列重试失败: {str(e)}"
+            logger.error(error_msg)
+            result["errors"].append(error_msg)
+
+        return result
+
     def get_status(self):
         """获取调度器状态"""
         if not self.is_running() or not self.status_file.exists():
@@ -244,17 +331,14 @@ class Scheduler:
             logger.error(f"更新状态文件失败: {e}")
 
     def _cleanup_queue(self):
-        """清理队列中的过期任务"""
-        try:
-            cleanup_result = self.ltp_queue.cleanup_jobs()
-            logger.info(f"队列清理完成: {cleanup_result}")
-
-            # 重试失败的任务
-            retry_count = self.ltp_queue.retry_failed_jobs()
-            if retry_count > 0:
-                logger.info(f"重试了 {retry_count} 个失败任务")
-        except Exception as e:
-            logger.error(f"队列清理失败: {e}")
+        """内部方法：清理并重试队列任务
+        
+        此方法被废弃，请使用 cleanup_queues() 和 retry_failed_jobs() 方法替代
+        """
+        logger.warning("_cleanup_queue 方法已废弃，请使用 cleanup_queues() 和 retry_failed_jobs() 方法替代")
+        cleanup_result = self.cleanup_queues()
+        retry_result = self.retry_failed_jobs()
+        return cleanup_result, retry_result
 
     def _cleanup_files(self):
         """清理状态文件"""
