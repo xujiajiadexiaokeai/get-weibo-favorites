@@ -12,6 +12,8 @@ setup(
         "requests>=2.31.0",
         "redis>=5.0.0",
         "rq>=1.15.1",
+        "python-dotenv>=1.0.0",
+        "Pillow>=10.1.0",
     ],
     extras_require={
         "dev": [
