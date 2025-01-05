@@ -107,6 +107,178 @@ def test_unit_parse_weibo():
     assert result["text"] == ""  # 默认空字符串
 
 
+def test_unit_parse_weibo_mix_media():
+    """测试微博数据解析 - mix_media_info"""
+    # 准备测试数据 - 使用mix_media_info
+    test_data = {
+        "idstr": "123456",
+        "mblogid": "abc123",
+        "created_at": "Sun Dec 01 12:09:53 +0800 2024",
+        "user": {"idstr": "user123", "screen_name": "TestUser"},
+        "isLongText": True,
+        "text_raw": "This is a test weibo",
+        "text": "<p>This is a test weibo</p>",
+        "source": "iPhone客户端",
+        "url_struct": [
+            {"long_url": "http://example.com/1"},
+            {"long_url": "http://example.com/2"},
+        ],
+        "pic_ids": ["pic1", "pic2"],
+        "mix_media_info": {
+            "items": [
+                {
+                    "type": "pic",
+                    "id": "pic1",
+                    "data": {
+                        "mw2000": {
+                            "url": "http://example.com/pic1.jpg",
+                            "width": 2000,
+                            "height": 1500
+                        },
+                        "pic_id": "pic1"
+                    }
+                },
+                {
+                    "type": "pic",
+                    "id": "pic2",
+                    "data": {
+                        "mw2000": {
+                            "url": "http://example.com/pic2.jpg",
+                            "width": 1800,
+                            "height": 1200
+                        },
+                        "pic_id": "pic2"
+                    }
+                }
+            ]
+        }
+    }
+
+    # 解析微博数据
+    result = parse_weibo(test_data)
+
+    # 验证基本字段
+    assert result["id"] == "123456"
+    assert result["mblogid"] == "abc123"
+    assert result["created_at"] == "2024-12-01 12:09:53"
+    assert result["user_id"] == "user123"
+    assert result["user_name"] == "TestUser"
+    assert result["is_long_text"] == True
+    assert result["text"] == "This is a test weibo"
+    assert result["text_html"] == "<p>This is a test weibo</p>"
+    assert result["source"] == "iPhone客户端"
+    assert len(result["links"]) == 2
+    assert result["links"][0] == "http://example.com/1"
+
+    # 验证图片相关字段
+    assert len(result["pic_ids"]) == 2
+    assert result["pic_ids"] == ["pic1", "pic2"]
+    assert len(result["pic_infos"]) == 2
+    assert result["pic_infos"]["pic1"]["mw2000"]["url"] == "http://example.com/pic1.jpg"
+    assert result["pic_infos"]["pic2"]["mw2000"]["width"] == 1800
+
+    # 验证URL格式
+    assert result["url"] == "https://weibo.com/user123/abc123"
+
+    # 验证爬取状态
+    assert result["crawl_status"] == "pending"
+    assert result["crawled"] == False
+
+
+def test_unit_parse_weibo_mix_media_edge_cases():
+    """测试mix_media_info的边界情况"""
+    # 测试空的mix_media_info
+    empty_mix_media = {
+        "idstr": "123",
+        "pic_ids": [],
+        "pic_num":0,
+        "pic_infos": {},
+        "mix_media_info": {}
+    }
+    result = parse_weibo(empty_mix_media)
+    assert "pic_infos" in result
+    assert len(result["pic_infos"]) == 0
+
+    # 测试空的items数组
+    empty_items = {
+        "idstr": "123",
+        "pic_ids": [],
+        "pic_num": 0,
+        "pic_infos": {},
+        "mix_media_info": {"items": []}
+    }
+    result = parse_weibo(empty_items)
+    assert "pic_infos" in result
+    assert len(result["pic_infos"]) == 0
+
+    # 测试非图片类型的item
+    non_pic_item = {
+        "idstr": "123",
+        "pic_ids": [],
+        "pic_num": 0,
+        "mix_media_info": {
+            "items": [
+                {
+                    "type": "video",
+                    "id": "video1",
+                    "data": {
+                        "url": "http://example.com/video1.mp4"
+                    }
+                }
+            ]
+        }
+    }
+    result = parse_weibo(non_pic_item)
+    assert "pic_infos" in result
+    assert len(result["pic_infos"]) == 0
+
+    # 测试混合有效和无效的图片items
+    mixed_items = {
+        "idstr": "123",
+        "pic_ids": ["pic1","pic2"],
+        "mix_media_info": {
+            "items": [
+                {
+                    "type": "pic",
+                    "id": "pic1",
+                    "data": {
+                        "pic_id": "pic1",
+                        "mw2000": {
+                            "url": "http://example.com/pic1.jpg",
+                            "width": 2000,
+                            "height": 1500
+                        }
+                    }
+                },
+                {
+                    "type": "video",
+                    "id": "video1",
+                    "data": {
+                        "url": "http://example.com/video1.mp4"
+                    }
+                },
+                {
+                    "type": "pic",
+                    "id": "pic2",
+                    "data": {
+                        "pic_id": "pic2",
+                        "mw2000": {
+                            "url": "http://example.com/pic2.jpg",
+                            "width": 1800,
+                            "height": 1200
+                        }
+                    }
+                }
+            ]
+        }
+    }
+    result = parse_weibo(mixed_items)
+    assert "pic_infos" in result
+    assert len(result["pic_infos"]) == 2
+    assert "pic1" in result["pic_infos"]
+    assert "pic2" in result["pic_infos"]
+
+
 def test_unit_check_duplicate():
     """测试重复检查"""
     # 测试找到重复

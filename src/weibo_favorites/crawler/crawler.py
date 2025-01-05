@@ -118,7 +118,7 @@ def crawl_favorites(
                         logger.error(f"添加长文本任务失败: {e}")
 
                 # 如果有图片，添加到队列
-                if weibo["pic_num"] > 0:
+                if len(weibo["pic_ids"]) > 0:
                     try:
                         job_id = img_queue.add_task(weibo)
                         logger.info(f"已将图片微博添加到队列，ID: {weibo['id']}, Job ID: {job_id}")
@@ -223,6 +223,17 @@ def parse_weibo(data: Dict) -> Dict:
             for u in url_structs:
                 if isinstance(u, dict) and "long_url" in u:
                     links.append(u["long_url"])
+        # 如果存在mix_media_info，将图片提取出来塞入pic_infos中
+        if "mix_media_info" in data and "items" in data["mix_media_info"]:
+            pic_infos = {}
+            for item in data["mix_media_info"]["items"]:
+                if item.get("type") == "pic" and "data" in item:
+                    pic_data = item["data"]
+                    pic_id = pic_data.get("pic_id")
+                    if pic_id:
+                        pic_infos[pic_id] = pic_data
+            if pic_infos:
+                data["pic_infos"] = pic_infos
 
         weibo = {
             "id": safe_str(data.get("idstr")),
@@ -263,7 +274,7 @@ def main():
     """主函数"""
     try:
         # 获取收藏数据
-        favorites = crawl_favorites(LongTextProcessQueue())
+        favorites = crawl_favorites(LongTextProcessQueue(), ImageProcessQueue())
         # 保存到数据库
         try:
             save_weibo(favorites)
