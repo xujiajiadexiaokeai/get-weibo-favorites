@@ -161,6 +161,7 @@ def crawl_favorites(
                 json.dump(all_favorites, f, ensure_ascii=False, indent=2)
             logger.info("数据已保存到 favorites.json")
 
+            # TODO: 爬虫不需要关心队列状态，由调度器管理
             # 输出队列状态
             queue_status = ltp_queue.get_queue_status()
             if queue_status:

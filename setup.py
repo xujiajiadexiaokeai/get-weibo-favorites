@@ -14,6 +14,7 @@ setup(
         "rq>=1.15.1",
         "python-dotenv>=1.0.0",
         "Pillow>=10.1.0",
+        "rq-scheduler>=0.13.1",
     ],
     extras_require={
         "dev": [

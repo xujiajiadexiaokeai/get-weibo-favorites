@@ -14,6 +14,7 @@ from rq.registry import FailedJobRegistry, FinishedJobRegistry
 from .. import config
 from ..utils import LogManager
 from .tasks import fetch_long_text, process_image_content
+from .rate_limiter import RateLimiter
 
 logger = LogManager.setup_logger("queue")
 
@@ -21,11 +22,16 @@ logger = LogManager.setup_logger("queue")
 class ProcessQueue:
     """基础处理队列类"""
 
-    def __init__(self, queue_name: str):
+    def __init__(
+        self,
+        queue_name: str,
+        rate_limit: Optional[int] = None
+    ):
         """初始化Redis连接和队列
 
         Args:
             queue_name: 队列名称
+            rate_limit: 速率限制（每分钟请求数），None表示不限制
         """
         try:
             # 初始化Redis连接
@@ -39,6 +45,16 @@ class ProcessQueue:
             # 初始化注册表
             self.failed_registry = FailedJobRegistry(queue=self.queue)
             self.finished_registry = FinishedJobRegistry(queue=self.queue)
+            
+            # 初始化速率限制器
+            self.rate_limiter = None
+            if config.RATE_LIMIT_ENABLED and rate_limit:
+                self.rate_limiter = RateLimiter(
+                    self.redis,
+                    queue_name,
+                    rate_limit,
+                    config.RATE_LIMIT_WINDOW
+                )
 
             logger.info(f"{queue_name} 队列初始化成功")
         except Exception as e:
@@ -193,17 +209,32 @@ class ProcessQueue:
             job_timeout: 任务超时时间
 
         Returns:
-            任务ID
+            任务ID，如果添加失败则返回None
         """
         try:
-            job = self.queue.enqueue(
-                task_func,
-                task_data,
-                job_timeout=job_timeout,
-                retry=config.MAX_RETRY_COUNT,
-                retry_delay=config.RETRY_DELAY,
-            )
-            logger.info(f"已添加任务: {task_data.get('id', 'unknown')}, job_id: {job.id}")
+            # 获取下一个执行时间
+            next_time = self.rate_limiter.get_next_execution_time() if self.rate_limiter else None
+            
+            # 创建任务
+            if next_time and next_time > datetime.now():
+                # 计算延迟时间
+                delay = (next_time - datetime.now()).total_seconds()
+                job = self.queue.enqueue_in(
+                    timedelta(seconds=delay),
+                    task_func,
+                    kwargs=task_data,
+                    job_timeout=job_timeout
+                )
+                logger.info(f"任务 {job.id} 已添加到队列，将在 {next_time} 执行")
+            else:
+                # 立即执行
+                job = self.queue.enqueue(
+                    task_func,
+                    kwargs=task_data,
+                    job_timeout=job_timeout
+                )
+                logger.info(f"任务 {job.id} 已添加到队列，立即执行")
+            
             return job.id
         except Exception as e:
             logger.error(f"添加任务到队列失败: {e}")
@@ -215,7 +246,7 @@ class LongTextProcessQueue(ProcessQueue):
 
     def __init__(self):
         """初始化长文本处理队列"""
-        super().__init__(config.LONG_TEXT_CONTENT_PROCESS_QUEUE)
+        super().__init__(config.LONG_TEXT_CONTENT_PROCESS_QUEUE, config.LONG_TEXT_RATE_LIMIT)
 
     def add_task(self, weibo_data: Dict[str, Any]) -> Optional[str]:
         """添加长文本处理任务到队列
@@ -240,12 +271,13 @@ class LongTextProcessQueue(ProcessQueue):
 
         return self._enqueue_task(fetch_long_text, task_data)
 
+
 class ImageProcessQueue(ProcessQueue):
     """图片处理队列"""
 
     def __init__(self):
         """初始化图片处理队列"""
-        super().__init__(config.IMAGE_PROCESS_QUEUE)
+        super().__init__(config.IMAGE_PROCESS_QUEUE, config.IMAGE_RATE_LIMIT)
 
     def add_task(self, weibo_data: Dict[str, Any]) -> List[str]:
         """添加图片处理任务到队列
