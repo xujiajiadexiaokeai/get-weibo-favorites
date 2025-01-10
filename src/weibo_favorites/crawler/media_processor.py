@@ -1,25 +1,8 @@
 """媒体处理模块"""
 
 import io
-import base64
 from PIL import Image
-from typing import Dict, Tuple, Optional
-
-def decode_data_url(data_url: str) -> bytes:
-    """解码Data URL格式的图片数据
-    
-    Args:
-        data_url: Data URL格式的图片数据，如
-                "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/..."
-    
-    Returns:
-        bytes: 解码后的图片二进制数据
-    """
-    try:
-        header, encoded = data_url.split(",", 1)
-        return base64.b64decode(encoded)
-    except Exception as e:
-        raise ValueError(f"Invalid data URL format: {str(e)}")
+from typing import Dict
 
 """图片处理子模块"""
 def process_image(image_data: bytes, max_width: int = 1024) -> Dict[str, bytes]:

@@ -3,9 +3,8 @@
 import json
 import requests
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Tuple
 
-from .. import config
 from ..database import (
     update_weibo_content,
     save_image_metadata,
@@ -14,7 +13,7 @@ from ..database import (
 )
 from ..utils import LogManager
 from .auth import CookieManager
-from .media_processor import decode_data_url, process_image
+from .media_processor import process_image
 
 logger = LogManager.setup_logger("task")
 
@@ -163,10 +162,6 @@ class LongTextTaskProcessor:
             }
 
             update_weibo_content(weibo_id, update_data)
-            with open(config.DATA_DIR / "long_text.json", "w", encoding="utf-8") as f:
-                json.dump(update_data, f, ensure_ascii=False, indent=2)
-
-            logger.debug("数据已保存到 long_text.json")
             logger.debug(f"成功获取并更新微博完整内容: {weibo_id}")
             return current_time
         except Exception as e:
@@ -298,7 +293,17 @@ class ImageTaskProcessor:
         try:
             # 准备请求头
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,ru;q=0.6",
+                "priority": "i",
+                "referer": "https://weibo.com/",
+                "sec-ch-ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": "\"macOS\"",
+                "sec-fetch-dest": "image",
+                "sec-fetch-mode": "no-cors",
+                "sec-fetch-site": "cross-site",
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             }
 
             # 发送请求
@@ -350,8 +355,8 @@ class ImageTaskProcessor:
             Dict[str, Any]: 处理结果
         """
         try:
-            image_bytes = decode_data_url(image_data["content"])
-            processed_images = process_image(image_bytes)
+            # 直接使用二进制内容，不需要解码
+            processed_images = process_image(image_data["content"])
             update_image_process_result(
                 image_data["weibo_id"],
                 image_data["pic_id"],

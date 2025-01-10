@@ -46,7 +46,7 @@ def create_table():
             width INTEGER,
             height INTEGER,
             content_type TEXT,
-            raw_content TEXT,
+            raw_content BLOB,
             thumbnail BLOB,
             compressed BLOB,
             created_at TEXT,
@@ -180,7 +180,7 @@ def save_image_metadata(image_data: Dict[str, Any]):
             - width: 图片宽度
             - height: 图片高度
             - content_type: 图片类型
-            - content: 图片Data URL字符串
+            - content: 图片二进制数据
     """
     conn = sqlite3.connect(config.DATABASE_FILE)
     cursor = conn.cursor()
