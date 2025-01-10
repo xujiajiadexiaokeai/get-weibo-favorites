@@ -28,7 +28,7 @@ class QueueWorker:
             # 设置要监听的队列
             self.queues = [
                 Queue(config.LONG_TEXT_CONTENT_PROCESS_QUEUE, connection=self.redis_conn),
-                Queue(config.IMAGE_PROCESS_QUEUE, connection=self.redis_conn)
+                Queue(config.IMAGE_CONTENT_PROCESS_QUEUE, connection=self.redis_conn)
             ]
 
             logger.info("工作进程初始化成功")

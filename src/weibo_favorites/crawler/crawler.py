@@ -120,8 +120,8 @@ def crawl_favorites(
                 # 如果有图片，添加到队列
                 if len(weibo["pic_ids"]) > 0:
                     try:
-                        job_id = img_queue.add_task(weibo)
-                        logger.info(f"已将图片微博添加到队列，ID: {weibo['id']}, Job ID: {job_id}")
+                        job_ids = img_queue.add_task(weibo)
+                        logger.info(f"已将该微博所有图片任务添加到队列，Weibo ID: {weibo['id']}, Job IDs: {job_ids}")
                     except Exception as e:
                         logger.error(f"添加图片任务失败: {e}")
 
@@ -163,9 +163,9 @@ def crawl_favorites(
 
             # TODO: 爬虫不需要关心队列状态，由调度器管理
             # 输出队列状态
-            queue_status = ltp_queue.get_queue_status()
-            if queue_status:
-                logger.info(f"队列状态: {queue_status}")
+            # queue_status = ltp_queue.get_queue_status()
+            # if queue_status:
+            #     logger.info(f"队列状态: {queue_status}")
 
     return all_favorites
 

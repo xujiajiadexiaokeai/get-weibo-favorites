@@ -277,7 +277,7 @@ class ImageProcessQueue(ProcessQueue):
 
     def __init__(self):
         """初始化图片处理队列"""
-        super().__init__(config.IMAGE_PROCESS_QUEUE, config.IMAGE_RATE_LIMIT)
+        super().__init__(config.IMAGE_CONTENT_PROCESS_QUEUE, config.IMAGE_RATE_LIMIT)
 
     def add_task(self, weibo_data: Dict[str, Any]) -> List[str]:
         """添加图片处理任务到队列
