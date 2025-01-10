@@ -1,9 +1,12 @@
-# database.py
+"""数据库操作模块"""
 
 import sqlite3
 from typing import Any, Dict, List
 
 from . import config
+from .utils import LogManager
+
+logger = LogManager.setup_logger("database")
 
 
 def create_table():
@@ -29,6 +32,27 @@ def create_table():
             crawled INTEGER DEFAULT 0,
             crawl_status TEXT DEFAULT 'pending',
             updated_at TEXT
+        )"""
+    )
+    
+    # 创建图片元数据表
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS weibo_images (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            weibo_id TEXT NOT NULL,
+            pic_id TEXT NOT NULL,
+            url TEXT NOT NULL,
+            width INTEGER,
+            height INTEGER,
+            content_type TEXT,
+            raw_content BLOB,
+            thumbnail BLOB,
+            compressed BLOB,
+            created_at TEXT,
+            processed INTEGER DEFAULT 0,
+            process_status TEXT DEFAULT 'pending',
+            UNIQUE(weibo_id, pic_id)
         )"""
     )
     conn.commit()
@@ -142,5 +166,117 @@ def get_pending_long_text_weibos() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"获取待处理的长文本微博失败: {e}")
         return None
+    finally:
+        conn.close()
+
+def save_image_metadata(image_data: Dict[str, Any]):
+    """保存图片元数据
+
+    Args:
+        image_data: 图片数据，包含以下字段：
+            - weibo_id: 微博ID
+            - pic_id: 图片ID
+            - url: 图片URL
+            - width: 图片宽度
+            - height: 图片高度
+            - content_type: 图片类型
+            - content: 图片二进制数据
+    """
+    conn = sqlite3.connect(config.DATABASE_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO weibo_images (
+                weibo_id, pic_id, url, width, height, content_type, raw_content,
+                created_at, processed, process_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), 0, 'pending')
+            """,
+            (
+                image_data["weibo_id"],
+                image_data["pic_id"],
+                image_data["url"],
+                image_data.get("width"),
+                image_data.get("height"),
+                image_data["content_type"],
+                image_data["content"]
+            )
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"保存图片元数据失败: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def update_image_process_result(weibo_id: str, pic_id: str, processed_images: Dict[str, bytes]):
+    """更新图片处理结果
+
+    Args:
+        weibo_id: 微博ID
+        pic_id: 图片ID
+        processed_images: 处理后的图片数据，包含以下字段：
+            - thumbnail: 缩略图数据
+            - compressed: 压缩后的图片数据
+    """
+    conn = sqlite3.connect(config.DATABASE_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE weibo_images
+            SET processed = 1,
+                process_status = 'success',
+                thumbnail = ?,
+                compressed = ?
+            WHERE weibo_id = ? AND pic_id = ?
+            """,
+            (
+                processed_images["thumbnail"],
+                processed_images["compressed"],
+                weibo_id,
+                pic_id
+            )
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"更新图片处理结果失败: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def update_image_process_status(weibo_id: str, pic_id: str, error_msg: str):
+    """更新图片处理状态
+
+    Args:
+        weibo_id: 微博ID
+        pic_id: 图片ID
+        error_msg: 错误信息
+    """
+    conn = sqlite3.connect(config.DATABASE_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE weibo_images
+            SET process_status = ?
+            WHERE weibo_id = ? AND pic_id = ?
+            """,
+            (
+                f"error: {error_msg}",
+                weibo_id,
+                pic_id
+            )
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"更新图片处理状态失败: {e}")
+        conn.rollback()
+        raise
     finally:
         conn.close()

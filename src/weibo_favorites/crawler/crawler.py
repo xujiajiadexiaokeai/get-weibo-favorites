@@ -10,7 +10,7 @@ import requests
 from .. import config
 from ..database import save_weibo
 from ..utils import LogManager
-from .queue import LongTextProcessQueue
+from .queue import ImageProcessQueue, LongTextProcessQueue
 
 # 设置日志记录器
 logger = LogManager.setup_logger("crawler")
@@ -66,6 +66,7 @@ def save_crawler_state(state: dict):
 
 def crawl_favorites(
     ltp_queue: LongTextProcessQueue,
+    img_queue: ImageProcessQueue,
     session: requests.Session,
     page_number: int = 0,
 ) -> List[Dict]:
@@ -116,6 +117,14 @@ def crawl_favorites(
                     except Exception as e:
                         logger.error(f"添加长文本任务失败: {e}")
 
+                # 如果有图片，添加到队列
+                if len(weibo["pic_ids"]) > 0:
+                    try:
+                        job_ids = img_queue.add_task(weibo)
+                        logger.info(f"已将该微博所有图片任务添加到队列，Weibo ID: {weibo['id']}, Job IDs: {job_ids}")
+                    except Exception as e:
+                        logger.error(f"添加图片任务失败: {e}")
+
                 all_favorites.append(weibo)
                 # 保存到数据库
                 save_weibo(weibo)
@@ -152,10 +161,11 @@ def crawl_favorites(
                 json.dump(all_favorites, f, ensure_ascii=False, indent=2)
             logger.info("数据已保存到 favorites.json")
 
+            # TODO: 爬虫不需要关心队列状态，由调度器管理
             # 输出队列状态
-            queue_status = ltp_queue.get_queue_status()
-            if queue_status:
-                logger.info(f"队列状态: {queue_status}")
+            # queue_status = ltp_queue.get_queue_status()
+            # if queue_status:
+            #     logger.info(f"队列状态: {queue_status}")
 
     return all_favorites
 
@@ -207,13 +217,24 @@ def parse_weibo(data: Dict) -> Dict:
     try:
         user = data.get("user", {}) or {}  # 确保user是字典
 
-        # 提取链接，如果url_struct不存在或为空，则返回空列表
+        # 提取附加链接，如果url_struct不存在或为空，则返回空列表
         links = []
         url_structs = data.get("url_struct", [])
         if url_structs and isinstance(url_structs, list):
             for u in url_structs:
                 if isinstance(u, dict) and "long_url" in u:
                     links.append(u["long_url"])
+        # 如果存在mix_media_info，将图片提取出来塞入pic_infos中
+        if "mix_media_info" in data and "items" in data["mix_media_info"]:
+            pic_infos = {}
+            for item in data["mix_media_info"]["items"]:
+                if item.get("type") == "pic" and "data" in item:
+                    pic_data = item["data"]
+                    pic_id = pic_data.get("pic_id")
+                    if pic_id:
+                        pic_infos[pic_id] = pic_data
+            if pic_infos:
+                data["pic_infos"] = pic_infos
 
         weibo = {
             "id": safe_str(data.get("idstr")),
@@ -230,6 +251,9 @@ def parse_weibo(data: Dict) -> Dict:
             "long_text": "",  # 需要后续从其他接口获取
             "source": safe_str(data.get("source")),
             "links": links,
+            "pic_ids": data.get("pic_ids", []),  # 添加图片ID列表
+            "pic_infos": data.get("pic_infos", {}),  # 添加原始图片信息
+            "pic_num": data.get("pic_num", 0),  # 添加图片数量
             "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "crawled": False,  # 标记是否已经爬取了完整内容
             "crawl_status": "pending"
@@ -246,21 +270,4 @@ def parse_weibo(data: Dict) -> Dict:
             "raw_data": data,
         }
 
-
-def main():
-    """主函数"""
-    try:
-        # 获取收藏数据
-        favorites = crawl_favorites(LongTextProcessQueue())
-        # 保存到数据库
-        try:
-            save_weibo(favorites)
-        except Exception as e:
-            logger.error(f"保存到数据库失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"程序执行出错: {str(e)}")
-        raise
-
-
-if __name__ == "__main__":
-    main()
+"""不再支持爬虫独立运行，转由调度器调度运行"""

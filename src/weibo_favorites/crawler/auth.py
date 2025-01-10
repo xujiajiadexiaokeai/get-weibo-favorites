@@ -249,11 +249,11 @@ def get_weibo_cookies() -> List[Dict]:
                     and "login.sina.com" not in current_url
                 ):
                     logger.info("检测到可能已登录成功...")
-                # 再等待几秒确保页面完全加载
-                time.sleep(5)
-                logged_in = True
-                break
-
+                    # 再等待几秒确保页面完全加载
+                    time.sleep(5)
+                    logged_in = True
+                    break
+                time.sleep(2) # 每2秒检查一次
                 # TODO: 检查是否已经跳转到登录成功页面
                 # if "weibo.com" in driver.current_url and "passport.weibo" not in driver.current_url:
                 #     logged_in = True
