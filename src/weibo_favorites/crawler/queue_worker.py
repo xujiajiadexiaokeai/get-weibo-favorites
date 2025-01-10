@@ -3,7 +3,7 @@ RQ Worker 实现模块
 """
 
 from redis import Redis
-from rq import Connection, Queue, Worker
+from rq import Queue, Worker
 from rq.registry import ScheduledJobRegistry
 
 from .. import config
@@ -27,8 +27,8 @@ class QueueWorker:
 
             # 设置要监听的队列
             self.queues = [
-                Queue('long_text_queue', connection=self.redis_conn),
-                Queue('image_queue', connection=self.redis_conn)
+                Queue(config.LONG_TEXT_CONTENT_PROCESS_QUEUE, connection=self.redis_conn),
+                Queue(config.IMAGE_PROCESS_QUEUE, connection=self.redis_conn)
             ]
 
             logger.info("工作进程初始化成功")
@@ -39,14 +39,13 @@ class QueueWorker:
     def run(self):
         """启动工作进程"""
         try:
-            with Connection(self.redis_conn):
-                worker = Worker(self.queues)
-                logger.info(f"工作进程启动成功，正在监听队列: {[q.name for q in self.queues]}")
-                if config.RATE_LIMIT_ENABLED:
-                    # 启动调度器 https://python-rq.org/docs/scheduling/#running-the-scheduler
-                    worker.work(with_scheduler=True)
-                else:
-                    worker.work()
+            worker = Worker(self.queues)
+            logger.info(f"工作进程启动成功，正在监听队列: {[q.name for q in self.queues]}")
+            if config.RATE_LIMIT_ENABLED:
+                # 启动调度器 https://python-rq.org/docs/scheduling/#running-the-scheduler
+                worker.work(with_scheduler=True)
+            else:
+                worker.work()
         except Exception as e:
             logger.error(f"工作进程运行失败: {e}")
             raise

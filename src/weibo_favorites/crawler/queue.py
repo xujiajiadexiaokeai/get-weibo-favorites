@@ -222,7 +222,7 @@ class ProcessQueue:
                 job = self.queue.enqueue_in(
                     timedelta(seconds=delay),
                     task_func,
-                    kwargs=task_data,
+                    kwargs={"task_data": task_data},
                     job_timeout=job_timeout
                 )
                 logger.info(f"任务 {job.id} 已添加到队列，将在 {next_time} 执行")
@@ -230,7 +230,7 @@ class ProcessQueue:
                 # 立即执行
                 job = self.queue.enqueue(
                     task_func,
-                    kwargs=task_data,
+                    kwargs={"task_data": task_data},
                     job_timeout=job_timeout
                 )
                 logger.info(f"任务 {job.id} 已添加到队列，立即执行")
@@ -312,7 +312,7 @@ class ImageProcessQueue(ProcessQueue):
 
             # 构建任务数据
             task_data = {
-                "weibo_id": weibo_data["idstr"],
+                "weibo_id": weibo_data["id"],
                 "pic_id": pic_id,
                 "url": mw2000["url"],
                 "width": mw2000["width"],
@@ -322,9 +322,9 @@ class ImageProcessQueue(ProcessQueue):
                 "created_at": datetime.now().isoformat(),
             }
 
-            job = self._enqueue_task(process_image_content, task_data)
-            if job:
-                job_ids.append(job.id)
-                logger.info(f"已添加图片处理任务: {pic_id}, job_id: {job.id}")
+            job_id = self._enqueue_task(process_image_content, task_data)
+            if job_id:
+                job_ids.append(job_id)
+                logger.info(f"已添加图片处理任务: {pic_id}, job_id: {job_id}")
 
         return job_ids

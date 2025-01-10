@@ -220,6 +220,73 @@ class TestProcessQueue:
             status = process_queue.get_queue_status()
             assert len(status["failed_jobs_details"]) == 0
 
+    def test_enqueue_task_with_kwargs(self, process_queue: ProcessQueue):
+        """测试使用 kwargs 添加任务"""
+        # 准备测试数据
+        task_func = MagicMock()
+        task_data = {"test_key": "test_value"}
+        job_timeout = "5m"
+
+        # 创建模拟的任务对象
+        mock_job = MagicMock()
+        mock_job.id = "test_job_id"
+        process_queue.queue.enqueue.return_value = mock_job
+
+        # 执行测试
+        job_id = process_queue._enqueue_task(task_func, task_data, job_timeout)
+
+        # 验证结果
+        process_queue.queue.enqueue.assert_called_once_with(
+            task_func,
+            kwargs={"task_data": task_data},
+            job_timeout=job_timeout
+        )
+        assert job_id == "test_job_id"
+
+    def test_enqueue_task_with_rate_limit(self, process_queue: ProcessQueue):
+        """测试带速率限制的任务入队"""
+        # 准备测试数据
+        task_func = MagicMock()
+        task_data = {"test_key": "test_value"}
+        job_timeout = "5m"
+
+        # 模拟速率限制器
+        next_time = datetime.now() + timedelta(seconds=10)
+        process_queue.rate_limiter = MagicMock()
+        process_queue.rate_limiter.get_next_execution_time.return_value = next_time
+
+        # 创建模拟的任务对象
+        mock_job = MagicMock()
+        mock_job.id = "test_job_id"
+        process_queue.queue.enqueue_in.return_value = mock_job
+
+        # 执行测试
+        job_id = process_queue._enqueue_task(task_func, task_data, job_timeout)
+
+        # 验证结果
+        process_queue.queue.enqueue_in.assert_called_once()
+        args, kwargs = process_queue.queue.enqueue_in.call_args
+        assert isinstance(args[0], timedelta)  # 检查延迟时间参数
+        assert args[1] == task_func  # 检查任务函数
+        assert kwargs["kwargs"] == {"task_data": task_data}  # 检查任务数据
+        assert kwargs["job_timeout"] == job_timeout  # 检查超时时间
+        assert job_id == "test_job_id"
+
+    def test_enqueue_task_error(self, process_queue: ProcessQueue):
+        """测试任务入队失败的情况"""
+        # 准备测试数据
+        task_func = MagicMock()
+        task_data = {"test_key": "test_value"}
+        
+        # 模拟入队异常
+        process_queue.queue.enqueue.side_effect = Exception("Queue error")
+
+        # 执行测试
+        job_id = process_queue._enqueue_task(task_func, task_data)
+
+        # 验证结果
+        assert job_id is None
+
 
 class TestLongTextProcessQueue:
     """长文本处理队列测试类"""
@@ -264,7 +331,7 @@ class TestImageProcessQueue:
         """测试添加带图片的任务"""
         # 准备测试数据
         weibo_data = {
-            "idstr": "123456",
+            "id": "123456",
             "pic_ids": ["pic1", "pic2"],
             "pic_infos": {
                 "pic1": {
@@ -285,9 +352,7 @@ class TestImageProcessQueue:
         }
 
         # Mock队列的enqueue方法
-        mock_job = MagicMock()
-        mock_job.id = "test_job_id"
-        image_queue._enqueue_task = MagicMock(return_value=mock_job)
+        image_queue._enqueue_task = MagicMock(return_value="test_job_id")
 
         # 执行测试
         job_ids = image_queue.add_task(weibo_data)
@@ -295,7 +360,7 @@ class TestImageProcessQueue:
         # 验证结果
         assert isinstance(job_ids, list)
         assert len(job_ids) == 2
-        assert all(isinstance(job_id, str) for job_id in job_ids)
+        assert job_ids == ["test_job_id", "test_job_id"]
         assert image_queue._enqueue_task.call_count == 2
 
         # 验证任务数据
@@ -316,7 +381,7 @@ class TestImageProcessQueue:
         """测试添加无图片的任务"""
         # 准备测试数据
         weibo_data = {
-            "idstr": "123456",
+            "id": "123456",
             "pic_ids": [],
             "pic_infos": {}
         }
@@ -336,7 +401,7 @@ class TestImageProcessQueue:
         """测试添加缺少mw2000尺寸的图片任务"""
         # 准备测试数据
         weibo_data = {
-            "idstr": "123456",
+            "id": "123456",
             "pic_ids": ["pic1", "pic2"],
             "pic_infos": {
                 "pic1": {
@@ -355,9 +420,7 @@ class TestImageProcessQueue:
         }
 
         # Mock队列的enqueue方法
-        mock_job = MagicMock()
-        mock_job.id = "test_job_id"
-        image_queue._enqueue_task = MagicMock(return_value=mock_job)
+        image_queue._enqueue_task = MagicMock(return_value="test_job_id")
 
         # 执行测试
         job_ids = image_queue.add_task(weibo_data)
@@ -380,13 +443,13 @@ class TestImageProcessQueue:
             {
                 "desc": "缺少必要的字段",
                 "data": {
-                    "idstr": "123456"
+                    "id": "123456"
                 }
             },
             {
                 "desc": "pic_ids和pic_infos不匹配",
                 "data": {
-                    "idstr": "123456",
+                    "id": "123456",
                     "pic_ids": ["pic1"],
                     "pic_infos": {
                         "pic2": {
@@ -402,7 +465,7 @@ class TestImageProcessQueue:
             {
                 "desc": "mw2000缺少必要属性",
                 "data": {
-                    "idstr": "123456",
+                    "id": "123456",
                     "pic_ids": ["pic1"],
                     "pic_infos": {
                         "pic1": {
