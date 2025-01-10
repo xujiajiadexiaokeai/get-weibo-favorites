@@ -105,7 +105,17 @@ class TestImageTaskProcessor:
             mock_get.assert_called_once_with(
                 mock_task_data["url"],
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                    "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                    "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,ru;q=0.6",
+                    "priority": "i",
+                    "referer": "https://weibo.com/",
+                    "sec-ch-ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": "\"macOS\"",
+                    "sec-fetch-dest": "image",
+                    "sec-fetch-mode": "no-cors",
+                    "sec-fetch-site": "cross-site",
+                    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
                 },
                 timeout=30
             )
@@ -149,14 +159,13 @@ class TestImageTaskProcessor:
         """测试成功处理和保存图片"""
         mock_processed_images = {"thumbnail": b"fake_thumbnail"}
         
-        with patch("weibo_favorites.crawler.tasks.decode_data_url", return_value=b"decoded_image") as mock_decode, \
-             patch("weibo_favorites.crawler.tasks.process_image", return_value=mock_processed_images) as mock_process, \
+        with patch("weibo_favorites.crawler.tasks.process_image", return_value=mock_processed_images) as mock_process, \
              patch("weibo_favorites.crawler.tasks.update_image_process_result", return_value=None) as mock_update:
             
             result = image_task_processor._process_and_save_image(mock_image_data)
             
-            mock_decode.assert_called_once_with(mock_image_data["content"])
-            mock_process.assert_called_once_with(b"decoded_image")
+            # 直接使用 content 字段的内容
+            mock_process.assert_called_once_with(mock_image_data["content"])
             mock_update.assert_called_once_with(
                 mock_image_data["weibo_id"],
                 mock_image_data["pic_id"],
@@ -170,7 +179,7 @@ class TestImageTaskProcessor:
     def test_process_and_save_image_processing_error(self, image_task_processor, mock_image_data):
         """测试处理和保存图片时遇到处理错误"""
         error_message = "Processing error"
-        with patch("weibo_favorites.crawler.tasks.decode_data_url", side_effect=Exception(error_message)) as mock_decode, \
+        with patch("weibo_favorites.crawler.tasks.process_image", side_effect=Exception(error_message)) as mock_process, \
              patch("weibo_favorites.crawler.tasks.update_image_process_status", return_value=None) as mock_update_status:
             
             with pytest.raises(ImageProcessingError) as exc_info:
@@ -305,16 +314,14 @@ class TestLongTextTaskProcessor:
         """测试成功保存长文本"""
         long_text = "这是一段长文本"
         mock_time = "2025-01-03 23:14:20"
-        
+    
         with patch("weibo_favorites.crawler.tasks.update_weibo_content", return_value=None) as mock_update, \
-             patch("builtins.open", mock_open()) as mock_file, \
              patch("weibo_favorites.crawler.tasks.datetime") as mock_datetime:
-            
+    
             mock_datetime.now.return_value.strftime.return_value = mock_time
             result = long_text_processor._save_long_text(mock_long_text_data["weibo_id"], long_text)
-            
+    
             mock_update.assert_called_once()
-            mock_file.assert_called_once()
             assert result == mock_time
 
     def test_save_long_text_database_error(self, long_text_processor, mock_long_text_data):
