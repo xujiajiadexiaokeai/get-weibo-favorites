@@ -270,21 +270,4 @@ def parse_weibo(data: Dict) -> Dict:
             "raw_data": data,
         }
 
-
-def main():
-    """主函数"""
-    try:
-        # 获取收藏数据
-        favorites = crawl_favorites(LongTextProcessQueue(), ImageProcessQueue())
-        # 保存到数据库
-        try:
-            save_weibo(favorites)
-        except Exception as e:
-            logger.error(f"保存到数据库失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"程序执行出错: {str(e)}")
-        raise
-
-
-if __name__ == "__main__":
-    main()
+"""不再支持爬虫独立运行，转由调度器调度运行"""
