@@ -400,8 +400,7 @@ def test_cleanup_files(scheduler, mock_files):
 
 @patch('time.sleep', return_value=None)
 @patch('weibo_favorites.crawler.scheduler.crawl_favorites')
-@patch('weibo_favorites.crawler.scheduler.save_weibo')
-def test_start_successful_run(mock_save_weibo, mock_crawl, mock_sleep, scheduler, mock_files, mock_run_logger):
+def test_start_successful_run(mock_crawl, mock_sleep, scheduler, mock_files, mock_run_logger):
     """测试成功启动并执行一次任务"""
     cookie_manager = MagicMock(spec=CookieManager)
     cookie_manager.check_validity.return_value = (True, None)
@@ -429,7 +428,6 @@ def test_start_successful_run(mock_save_weibo, mock_crawl, mock_sleep, scheduler
     
     # 验证其他组件交互
     mock_crawl.assert_called_once()
-    mock_save_weibo.assert_called_once_with([{"id": 1}, {"id": 2}])
     
     # 验证等待逻辑
     mock_sleep.assert_called_once()

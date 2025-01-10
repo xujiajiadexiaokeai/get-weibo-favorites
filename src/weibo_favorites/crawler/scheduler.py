@@ -104,13 +104,9 @@ class Scheduler:
                     logger.info("开始执行爬取任务")
                     favorites = crawl_favorites(self.ltp_queue, self.img_queue, session)
 
+                    # 更新运行记录
                     if favorites:
-                        # 保存到数据库
-                        save_weibo(favorites)
-                        logger.info(f"成功保存 {len(favorites)} 条收藏到数据库")
                         logger.info(f"任务完成，成功爬取并保存 {len(favorites)} 条收藏")
-
-                        # 更新运行记录
                         self.run_logger.update_run(
                             run_id,
                             status="success",

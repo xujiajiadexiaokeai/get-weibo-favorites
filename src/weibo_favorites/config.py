@@ -55,5 +55,5 @@ FINISHED_JOBS_RETENTION = 86400  # 完成任务保留时间（秒）
 # Rate limiting configuration
 RATE_LIMIT_ENABLED = True  # 是否启用速率限制
 RATE_LIMIT_WINDOW = 60  # 速率限制窗口（秒）
-LONG_TEXT_RATE_LIMIT = 10  # 长文本处理的每分钟最大请求数
+LONG_TEXT_RATE_LIMIT = 20  # 长文本处理的每分钟最大请求数
 IMAGE_RATE_LIMIT = 10  # 图片处理的每分钟最大请求数
