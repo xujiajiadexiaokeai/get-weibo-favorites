@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}微博详情 - 微博收藏管理{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="bg-white shadow-lg rounded-lg overflow-hidden max-w-4xl mx-auto">
+        <!-- 返回按钮 -->
+        <div class="p-4 border-b border-gray-200">
+            <a href="{{ url_for('favorites') }}" class="text-indigo-600 hover:text-indigo-900 flex items-center">
+                <i class="bi bi-arrow-left mr-2"></i> 返回收藏列表
+            </a>
+        </div>
+
+        <!-- 微博内容 -->
+        <div class="p-6 space-y-6">
+            <!-- 用户信息和时间 -->
+            <div class="flex items-center space-x-4 text-sm text-gray-500">
+                <span class="flex items-center">
+                    <i class="bi bi-person mr-1"></i> {{ item.user_name }}
+                </span>
+                <span class="flex items-center">
+                    <i class="bi bi-clock mr-1"></i> {{ item.created_at }}
+                </span>
+                <a href="{{ item.url }}" target="_blank" class="flex items-center text-indigo-600 hover:text-indigo-900">
+                    <i class="bi bi-link-45deg mr-1"></i> 查看原文
+                </a>
+            </div>
+
+            <!-- 微博文本内容 -->
+            <div class="text-gray-800 text-lg leading-relaxed">
+                {{ item.long_text|safe }}
+            </div>
+
+            <!-- 图片展示 -->
+            {% if item.images %}
+            <div class="mt-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {% for image in item.images %}
+                    {% if image.data_url %}
+                    <div class="relative w-[200px] h-[200px] group">
+                        <img src="{{ image.data_url }}" 
+                             alt="微博图片" 
+                             class="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                             onclick="openImageViewer(this.src)"
+                             loading="lazy">
+                        <div class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                            {{ image.width }}x{{ image.height }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- 图片查看器 -->
+<div id="imageViewer" class="fixed inset-0 bg-black bg-opacity-90 hidden z-50" onclick="closeImageViewer()">
+    <div class="absolute top-4 right-4">
+        <button onclick="closeImageViewer()" class="text-white hover:text-gray-300">
+            <i class="bi bi-x-lg text-2xl"></i>
+        </button>
+    </div>
+    <div class="flex items-center justify-center h-full p-4">
+        <img id="viewerImage" src="" alt="大图" class="max-h-[90vh] max-w-[90vw] object-contain">
+    </div>
+</div>
+
+<script>
+function openImageViewer(imageUrl) {
+    const viewer = document.getElementById('imageViewer');
+    const viewerImage = document.getElementById('viewerImage');
+    viewerImage.src = imageUrl;
+    viewer.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeImageViewer() {
+    const viewer = document.getElementById('imageViewer');
+    viewer.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+// 按ESC键关闭图片查看器
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeImageViewer();
+    }
+});
+</script>
+{% endblock %}

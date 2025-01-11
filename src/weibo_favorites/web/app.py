@@ -7,12 +7,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, flash, redirect, url_for
 
 from .. import config
 from ..crawler.auth import CookieManager
 from ..crawler.run_history import RunLogger
 from ..crawler.scheduler import Scheduler
+from .db import get_favorites, get_weibo_by_id
 from ..utils import LogManager
 
 # 加载 .env 文件
@@ -91,35 +92,24 @@ def index():
 @app.route("/favorites")
 def favorites():
     """收藏列表页面"""
-    page = request.args.get("page", 1, type=int)
-    per_page = 20
-
-    db = get_db()
-    cursor = db.cursor()
-
-    # 获取总数
-    total = cursor.execute("SELECT COUNT(*) FROM weibo_favorites").fetchone()[0]
-
-    # TODO: 修改created_at字段格式，然后优化查询
-    # 获取分页数据
-    offset = (page - 1) * per_page
-    cursor.execute(
-        """
-        SELECT 
-            id, created_at, url, user_name, user_id, is_long_text, text, text_html, source, links FROM weibo_favorites 
-        ORDER BY 
-            created_at DESC 
-        LIMIT ? OFFSET ?
-    """,
-        (per_page, offset),
-    )
-    items = cursor.fetchall()
-
-    total_pages = (total + per_page - 1) // per_page
-
-    return render_template(
-        "favorites.html", items=items, page=page, total_pages=total_pages, total=total
-    )
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        
+        items, total = get_favorites(page, per_page)
+        total_pages = (total + per_page - 1) // per_page
+        
+        return render_template(
+            'favorites.html',
+            items=items,
+            total=total,
+            page=page,
+            total_pages=total_pages
+        )
+    except Exception as e:
+        logger.error(f"获取收藏列表失败: {e}")
+        flash('获取收藏列表失败', 'error')
+        return render_template('favorites.html', items=[], total=0, page=1, total_pages=1)
 
 
 @app.route("/runs")
@@ -191,6 +181,23 @@ def control_scheduler():
 def get_cookie_status():
     """获取Cookie状态"""
     return jsonify(cookie_manager.get_status())
+
+
+@app.route('/weibo/<weibo_id>')
+def weibo_detail(weibo_id):
+    """微博详情页面"""
+    try:
+        # 从数据库获取微博信息
+        weibo = get_weibo_by_id(weibo_id)
+        if not weibo:
+            flash('未找到该微博', 'error')
+            return redirect(url_for('favorites'))
+            
+        return render_template('weibo_detail.html', item=weibo)
+    except Exception as e:
+        logger.error(f"获取微博详情失败: {e}")
+        flash('获取微博详情失败', 'error')
+        return redirect(url_for('favorites'))
 
 
 def run_web():

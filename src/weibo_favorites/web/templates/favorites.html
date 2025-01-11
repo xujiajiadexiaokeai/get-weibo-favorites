@@ -12,6 +12,25 @@
             <div class="space-y-2">
                 <!-- 微博内容 -->
                 <div class="text-gray-800">{{ item.text_html|safe }}</div>
+
+                <!-- 图片展示 -->
+                {% if item.images %}
+                <div class="mt-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {% for image in item.images %}
+                        {% if image.data_url %}
+                        <div class="relative w-[200px] h-[200px]">
+                            <img src="{{ image.data_url }}" 
+                                 alt="微博图片" 
+                                 class="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                 onclick="openImageViewer(this.src)"
+                                 loading="lazy">
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
                 
                 <!-- 微博元数据 -->
                 <div class="flex items-center space-x-4 text-sm text-gray-500">
@@ -23,8 +42,14 @@
                     </span>
                     <span>
                         <i class="bi bi-link-45deg"></i>
-                        <a href="{{ item.url }}" target="_blank">原文链接</a>
+                        <a href="{{ item.url }}" target="_blank" class="text-indigo-600 hover:text-indigo-900">查看原文</a>
                     </span>
+                    {% if item.is_long_text or item.images %}
+                    <span>
+                        <i class="bi bi-box-arrow-up-right"></i>
+                        <a href="{{ url_for('weibo_detail', weibo_id=item.id) }}" class="text-indigo-600 hover:text-indigo-900">查看详情</a>
+                    </span>
+                    {% endif %}
                 </div>
             </div>
         </div>
