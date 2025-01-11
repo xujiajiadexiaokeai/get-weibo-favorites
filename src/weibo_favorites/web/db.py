@@ -32,7 +32,7 @@ def get_weibo_images(cursor: sqlite3.Cursor, weibo_id: str, use_thumbnail: bool 
     Args:
         cursor: 数据库游标
         weibo_id: 微博ID
-        use_thumbnail: 是否使用缩略图，True则返回thumbnail字段，False则返回compressed字段
+        use_thumbnail: 是否使用缩略图，True则返回thumbnail字段，False则返回raw_content字段
     """
     cursor.execute(
         """
@@ -42,8 +42,8 @@ def get_weibo_images(cursor: sqlite3.Cursor, weibo_id: str, use_thumbnail: bool 
             width,
             height,
             content_type,
+            raw_content,
             thumbnail,
-            compressed,
             process_status
         FROM weibo_images
         WHERE weibo_id = ? AND processed = 1
@@ -56,7 +56,7 @@ def get_weibo_images(cursor: sqlite3.Cursor, weibo_id: str, use_thumbnail: bool 
     # 处理图片数据
     for image in images:
         # 选择使用哪个图片数据
-        img_data = image['thumbnail'] if use_thumbnail else image['compressed']
+        img_data = image['thumbnail'] if use_thumbnail else image['raw_content']
         if img_data:
             # 转换为base64字符串
             b64_data = base64.b64encode(img_data).decode('utf-8')
@@ -67,7 +67,7 @@ def get_weibo_images(cursor: sqlite3.Cursor, weibo_id: str, use_thumbnail: bool 
             
         # 清理不需要的字段
         del image['thumbnail']
-        del image['compressed']
+        del image['raw_content']
         del image['url']
     
     return images
