@@ -34,5 +34,9 @@ logs/
 .DS_Store
 .env
 
+# Dictionary files
+libs/dict/
+libs/libsimple.dylib
+
 # Extensions
 *.todo
