@@ -63,7 +63,7 @@ class WeiboDB:
                         created_at UNINDEXED,  -- 不索引时间
                         content='weibo_favorites',  -- 指定内容来源表
                         content_rowid='rowid',      -- 指定行ID
-                        tokenize='simple'           -- 使用unicode分词器
+                        tokenize='simple'           -- 使用simple分词器
                     )"""
                 )
                 
