@@ -2,6 +2,7 @@
 
 import sqlite3
 from typing import Any, Dict, List
+from contextlib import contextmanager
 
 from . import config
 from .utils import LogManager
@@ -9,61 +10,86 @@ from .utils import LogManager
 logger = LogManager.setup_logger("database")
 
 
+@contextmanager
+def get_connection() -> sqlite3.Connection:
+    """获取数据库连接，支持加载SQLite扩展
+
+    Returns:
+        sqlite3.Connection: 数据库连接对象
+    """
+    conn = None
+    try:
+        # 连接数据库
+        conn = sqlite3.connect(config.DATABASE_FILE)
+        
+        # 加载SQLite扩展
+        conn.enable_load_extension(True)
+        conn.load_extension(config.EXTENSION_SIMPLE_PATH)
+        
+        yield conn
+        
+    finally:
+        if conn:
+            conn.close()
+
+
 def create_table():
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS weibo_favorites (
-            id TEXT PRIMARY KEY,
-            mblogid TEXT,
-            created_at TEXT,
-            url TEXT,
-            user_name TEXT,
-            user_id TEXT,
-            is_long_text INTEGER,
-            text TEXT,
-            text_html TEXT,
-            long_text TEXT,
-            source TEXT,
-            links TEXT,
-            collected_at TEXT,
-            text_length INTEGER,
-            crawled INTEGER DEFAULT 0,
-            crawl_status TEXT DEFAULT 'pending',
-            updated_at TEXT
-        )"""
-    )
-    
-    # 创建图片元数据表
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS weibo_images (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            weibo_id TEXT NOT NULL,
-            pic_id TEXT NOT NULL,
-            url TEXT NOT NULL,
-            width INTEGER,
-            height INTEGER,
-            content_type TEXT,
-            raw_content BLOB,
-            thumbnail BLOB,
-            compressed BLOB,
-            created_at TEXT,
-            processed INTEGER DEFAULT 0,
-            process_status TEXT DEFAULT 'pending',
-            UNIQUE(weibo_id, pic_id)
-        )"""
-    )
-    conn.commit()
-    conn.close()
+    """创建数据库表"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # 创建微博表
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weibo_favorites (
+                id TEXT PRIMARY KEY,
+                mblogid TEXT,
+                created_at TEXT,
+                url TEXT,
+                user_name TEXT,
+                user_id TEXT,
+                is_long_text INTEGER,
+                text TEXT,
+                text_html TEXT,
+                long_text TEXT,
+                source TEXT,
+                links TEXT,
+                collected_at TEXT,
+                text_length INTEGER,
+                crawled INTEGER DEFAULT 0,
+                crawl_status TEXT DEFAULT 'pending',
+                updated_at TEXT
+            )"""
+        )
+        
+        # 创建图片表
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weibo_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                weibo_id TEXT NOT NULL,
+                pic_id TEXT NOT NULL,
+                url TEXT NOT NULL,
+                width INTEGER,
+                height INTEGER,
+                content_type TEXT,
+                raw_content BLOB,
+                thumbnail BLOB,
+                compressed BLOB,
+                created_at TEXT,
+                processed INTEGER DEFAULT 0,
+                process_status TEXT DEFAULT 'pending',
+                UNIQUE(weibo_id, pic_id)
+            )"""
+        )
+        
+        conn.commit()
 
 
 def save_weibo(weibo: Dict[str, Any]):
     """保存单条微博数据"""
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    try:
+    with get_connection() as conn:
+        cursor = conn.cursor()
         cursor.execute(
             """
             INSERT OR REPLACE INTO weibo_favorites (
@@ -96,12 +122,6 @@ def save_weibo(weibo: Dict[str, Any]):
             ),
         )
         conn.commit()
-    except Exception as e:
-        logger.error(f"保存微博数据失败: {e}")
-    finally:
-        conn.close()
-
-
 def update_weibo_content(weibo_id: str, update_data: Dict[str, Any]):
     """更新微博内容
 
@@ -109,10 +129,8 @@ def update_weibo_content(weibo_id: str, update_data: Dict[str, Any]):
         weibo_id: 微博ID
         update_data: 要更新的数据字段
     """
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-
-    try:
+    with get_connection() as conn:
+        cursor = conn.cursor()
         # 构建更新语句
         update_fields = []
         values = []
@@ -140,34 +158,6 @@ def update_weibo_content(weibo_id: str, update_data: Dict[str, Any]):
 
         cursor.execute(sql, values)
         conn.commit()
-    except Exception as e:
-        logger.error(f"更新微博内容失败: {e}")
-    finally:
-        conn.close()
-
-
-def get_pending_long_text_weibos() -> List[Dict[str, Any]]:
-    """获取待处理的长文本微博列表"""
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(
-            """
-            SELECT id, mblogid, is_long_text, crawl_status
-            FROM weibo_favorites
-            WHERE is_long_text = 1 AND crawl_status = 'pending'
-            ORDER BY created_at DESC
-        """
-        )
-
-        columns = ["id", "mblogid", "is_long_text", "crawl_status"]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
-    except Exception as e:
-        logger.error(f"获取待处理的长文本微博失败: {e}")
-        return None
-    finally:
-        conn.close()
 
 def save_image_metadata(image_data: Dict[str, Any]):
     """保存图片元数据
@@ -182,9 +172,8 @@ def save_image_metadata(image_data: Dict[str, Any]):
             - content_type: 图片类型
             - content: 图片二进制数据
     """
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    try:
+    with get_connection() as conn:
+        cursor = conn.cursor()
         cursor.execute(
             """
             INSERT OR REPLACE INTO weibo_images (
@@ -204,12 +193,6 @@ def save_image_metadata(image_data: Dict[str, Any]):
             )
         )
         conn.commit()
-    except Exception as e:
-        logger.error(f"保存图片元数据失败: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
 
 
 def update_image_process_result(weibo_id: str, pic_id: str, processed_images: Dict[str, bytes]):
@@ -222,9 +205,8 @@ def update_image_process_result(weibo_id: str, pic_id: str, processed_images: Di
             - thumbnail: 缩略图数据
             - compressed: 压缩后的图片数据
     """
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    try:
+    with get_connection() as conn:
+        cursor = conn.cursor()
         cursor.execute(
             """
             UPDATE weibo_images
@@ -242,12 +224,6 @@ def update_image_process_result(weibo_id: str, pic_id: str, processed_images: Di
             )
         )
         conn.commit()
-    except Exception as e:
-        logger.error(f"更新图片处理结果失败: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
 
 
 def update_image_process_status(weibo_id: str, pic_id: str, error_msg: str):
@@ -258,9 +234,8 @@ def update_image_process_status(weibo_id: str, pic_id: str, error_msg: str):
         pic_id: 图片ID
         error_msg: 错误信息
     """
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    try:
+    with get_connection() as conn:
+        cursor = conn.cursor()
         cursor.execute(
             """
             UPDATE weibo_images
@@ -274,9 +249,20 @@ def update_image_process_status(weibo_id: str, pic_id: str, error_msg: str):
             )
         )
         conn.commit()
-    except Exception as e:
-        logger.error(f"更新图片处理状态失败: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+
+def get_pending_long_text_weibos() -> List[Dict[str, Any]]:
+    """获取待处理的长文本微博列表"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, mblogid, is_long_text, crawl_status
+            FROM weibo_favorites
+            WHERE is_long_text = 1 AND crawl_status = 'pending'
+            ORDER BY created_at DESC
+        """
+        )
+
+        columns = ["id", "mblogid", "is_long_text", "crawl_status"]
+
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]

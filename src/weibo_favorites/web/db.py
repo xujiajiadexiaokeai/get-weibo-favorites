@@ -226,11 +226,12 @@ class WeiboDB:
                     """
                     SELECT 
                         weibo_favorites.*,
-                        snippet(weibo_fts, -1, '<mark>', '</mark>', '...', 64) as matched_text
+                        snippet(weibo_fts, -1, '<mark>', '</mark>', '...', 64) as matched_text,
+                        bm25(weibo_fts) as relevance
                     FROM weibo_favorites 
                     JOIN weibo_fts ON weibo_favorites.rowid = weibo_fts.rowid 
                     WHERE weibo_fts MATCH ? 
-                    ORDER BY rank
+                    ORDER BY relevance DESC, created_at DESC
                     LIMIT ? OFFSET ?
                     """,
                     (query, per_page, offset)
