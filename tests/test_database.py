@@ -9,16 +9,21 @@ from weibo_favorites.database import (
     get_pending_long_text_weibos,
     save_weibo,
     update_weibo_content,
+    save_image_metadata,
+    update_image_process_result,
+    update_image_process_status,
+    get_connection,
 )
 
 
 @pytest.fixture(autouse=True)
 def setup_test_db():
     """设置测试数据库"""
-    # 保存原始数据库路径
+    # 保存原始配置
     original_db_path = config.DATABASE_FILE
+    original_extension_path = config.EXTENSION_SIMPLE_PATH
 
-    # 设置测试数据库路径
+    # 设置测试配置
     test_db_path = config.DATA_DIR / "test_weibo_favorites.db"
     config.DATABASE_FILE = test_db_path
 
@@ -27,33 +32,54 @@ def setup_test_db():
         test_db_path.unlink()
 
     # 创建数据库表
-    conn = sqlite3.connect(test_db_path)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS weibo_favorites (
-            id TEXT PRIMARY KEY,
-            mblogid TEXT,
-            created_at TEXT,
-            url TEXT,
-            user_name TEXT,
-            user_id TEXT,
-            is_long_text INTEGER,
-            text TEXT,
-            text_html TEXT,
-            long_text TEXT,
-            source TEXT,
-            links TEXT,
-            collected_at TEXT,
-            text_length INTEGER,
-            crawled INTEGER DEFAULT 0,
-            crawl_status TEXT DEFAULT 'pending',
-            updated_at TEXT
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        # 创建微博表
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weibo_favorites (
+                id TEXT PRIMARY KEY,
+                mblogid TEXT,
+                created_at TEXT,
+                url TEXT,
+                user_name TEXT,
+                user_id TEXT,
+                is_long_text INTEGER,
+                text TEXT,
+                text_html TEXT,
+                long_text TEXT,
+                source TEXT,
+                links TEXT,
+                collected_at TEXT,
+                text_length INTEGER,
+                crawled INTEGER DEFAULT 0,
+                crawl_status TEXT DEFAULT 'pending',
+                updated_at TEXT
+            )
+            """
         )
-    """
-    )
-    conn.commit()
-    conn.close()
+        # 创建图片表
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weibo_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                weibo_id TEXT NOT NULL,
+                pic_id TEXT NOT NULL,
+                url TEXT NOT NULL,
+                width INTEGER,
+                height INTEGER,
+                content_type TEXT,
+                raw_content BLOB,
+                thumbnail BLOB,
+                compressed BLOB,
+                created_at TEXT,
+                processed INTEGER DEFAULT 0,
+                process_status TEXT DEFAULT 'pending',
+                UNIQUE(weibo_id, pic_id)
+            )
+            """
+        )
+        conn.commit()
 
     yield
 
@@ -61,8 +87,9 @@ def setup_test_db():
     if os.path.exists(test_db_path):
         os.remove(test_db_path)
 
-    # 恢复原始数据库路径
+    # 恢复原始配置
     config.DATABASE_FILE = original_db_path
+    config.EXTENSION_SIMPLE_PATH = original_extension_path
 
 
 def test_save_weibo():
@@ -91,11 +118,10 @@ def test_save_weibo():
     save_weibo(test_weibo)
 
     # 验证保存结果
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM weibo_favorites WHERE id = ?", (test_weibo["id"],))
-    result = cursor.fetchone()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM weibo_favorites WHERE id = ?", (test_weibo["id"],))
+        result = cursor.fetchone()
 
     assert result is not None
     assert result[0] == test_weibo["id"]  # id
@@ -107,18 +133,17 @@ def test_save_weibo():
 def test_update_weibo_content():
     """测试更新微博内容"""
     # 先插入一条测试数据
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
     weibo_id = "123456789"
-    cursor.execute(
-        """
-        INSERT INTO weibo_favorites (id, is_long_text, text, crawl_status)
-        VALUES (?, ?, ?, ?)
-    """,
-        (weibo_id, True, "原始内容", "pending"),
-    )
-    conn.commit()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO weibo_favorites (id, is_long_text, text, crawl_status)
+            VALUES (?, ?, ?, ?)
+            """,
+            (weibo_id, True, "原始内容", "pending"),
+        )
+        conn.commit()
 
     # 更新内容
     update_data = {
@@ -132,14 +157,13 @@ def test_update_weibo_content():
     update_weibo_content(weibo_id, update_data)
 
     # 验证更新结果
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT long_text, text_length, crawled, crawl_status FROM weibo_favorites WHERE id = ?",
-        (weibo_id,),
-    )
-    result = cursor.fetchone()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT long_text, text_length, crawled, crawl_status FROM weibo_favorites WHERE id = ?",
+            (weibo_id,),
+        )
+        result = cursor.fetchone()
 
     assert result is not None
     assert result[0] == update_data["long_text"]
@@ -148,28 +172,110 @@ def test_update_weibo_content():
     assert result[3] == update_data["crawl_status"]
 
 
+def test_save_and_update_image():
+    """测试图片保存和更新"""
+    # 准备测试数据
+    image_data = {
+        "weibo_id": "123456789",
+        "pic_id": "pic123",
+        "url": "https://example.com/image.jpg",
+        "width": 800,
+        "height": 600,
+        "content_type": "image/jpeg",
+        "content": b"test_image_content"
+    }
+
+    # 保存图片元数据
+    save_image_metadata(image_data)
+
+    # 准备处理结果
+    processed_images = {
+        "thumbnail": b"thumbnail_data",
+        "compressed": b"compressed_data"
+    }
+
+    # 更新处理结果
+    update_image_process_result(image_data["weibo_id"], image_data["pic_id"], processed_images)
+
+    # 验证结果
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT weibo_id, pic_id, url, width, height, content_type, 
+                   raw_content, thumbnail, compressed, process_status
+            FROM weibo_images 
+            WHERE weibo_id = ? AND pic_id = ?
+            """,
+            (image_data["weibo_id"], image_data["pic_id"])
+        )
+        result = cursor.fetchone()
+
+    assert result is not None
+    assert result[0] == image_data["weibo_id"]
+    assert result[1] == image_data["pic_id"]
+    assert result[2] == image_data["url"]
+    assert result[3] == image_data["width"]
+    assert result[4] == image_data["height"]
+    assert result[5] == image_data["content_type"]
+    assert result[6] == image_data["content"]
+    assert result[7] == processed_images["thumbnail"]
+    assert result[8] == processed_images["compressed"]
+    assert result[9] == "success"
+
+
+def test_update_image_process_status():
+    """测试更新图片处理状态"""
+    # 准备测试数据
+    image_data = {
+        "weibo_id": "123456789",
+        "pic_id": "pic123",
+        "url": "https://example.com/image.jpg",
+        "content_type": "image/jpeg",
+        "content": b"test_image_content"
+    }
+
+    # 保存图片元数据
+    save_image_metadata(image_data)
+
+    # 更新处理状态
+    error_msg = "处理失败：图片格式不支持"
+    update_image_process_status(image_data["weibo_id"], image_data["pic_id"], error_msg)
+
+    # 验证结果
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT process_status FROM weibo_images WHERE weibo_id = ? AND pic_id = ?",
+            (image_data["weibo_id"], image_data["pic_id"])
+        )
+        result = cursor.fetchone()
+
+    assert result is not None
+    assert result[0] == f"error: {error_msg}"
+
+
 def test_get_pending_long_text_weibos():
     """测试获取待处理的长文本微博"""
     # 插入测试数据
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    cursor = conn.cursor()
-    test_data = [
-        ("1", "A1", True, "pending"),
-        ("2", "A2", True, "completed"),
-        ("3", "A3", False, "pending"),
-        ("4", "A4", True, "pending"),
-    ]
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        test_data = [
+            ("1", "A1", True, "pending"),
+            ("2", "A2", True, "completed"),
+            ("3", "A3", False, "pending"),
+            ("4", "A4", True, "pending"),
+        ]
 
-    for weibo_id, mblogid, is_long_text, status in test_data:
-        cursor.execute(
-            """
-            INSERT INTO weibo_favorites (id, mblogid, is_long_text, crawl_status)
-            VALUES (?, ?, ?, ?)
-        """,
-            (weibo_id, mblogid, is_long_text, status),
-        )
-    conn.commit()
-    conn.close()
+        for weibo_id, mblogid, is_long_text, status in test_data:
+            cursor.execute(
+                """
+                INSERT INTO weibo_favorites (id, mblogid, is_long_text, crawl_status)
+                VALUES (?, ?, ?, ?)
+                """,
+                (weibo_id, mblogid, is_long_text, status),
+            )
+        conn.commit()
 
     # 获取待处理的长文本微博
     pending_weibos = get_pending_long_text_weibos()

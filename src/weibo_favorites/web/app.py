@@ -13,7 +13,7 @@ from .. import config
 from ..crawler.auth import CookieManager
 from ..crawler.run_history import RunLogger
 from ..crawler.scheduler import Scheduler
-from .db import get_favorites, get_weibo_by_id
+from .db import db
 from ..utils import LogManager
 
 # 加载 .env 文件
@@ -57,13 +57,6 @@ def format_duration(seconds):
         return "N/A"
 
 
-def get_db():
-    """获取数据库连接"""
-    db = sqlite3.connect(config.DATABASE_FILE)
-    db.row_factory = sqlite3.Row
-    return db
-
-
 @app.route("/")
 def index():
     """首页 - 显示爬虫状态和日志"""
@@ -96,7 +89,16 @@ def favorites():
         page = request.args.get('page', 1, type=int)
         per_page = 20
         
-        items, total = get_favorites(page, per_page)
+        # 获取搜索关键词
+        query = request.args.get('q', '').strip()
+        
+        if query:
+            # 如果有搜索关键词，使用搜索功能
+            items, total = db.search_weibos(query, page, per_page)
+        else:
+            # 否则获取所有收藏
+            items, total = db.get_favorites(page, per_page)
+            
         total_pages = (total + per_page - 1) // per_page
         
         return render_template(
@@ -104,7 +106,8 @@ def favorites():
             items=items,
             total=total,
             page=page,
-            total_pages=total_pages
+            total_pages=total_pages,
+            query=query
         )
     except Exception as e:
         logger.error(f"获取收藏列表失败: {e}")
@@ -188,7 +191,7 @@ def weibo_detail(weibo_id):
     """微博详情页面"""
     try:
         # 从数据库获取微博信息
-        weibo = get_weibo_by_id(weibo_id)
+        weibo = db.get_weibo_by_id(weibo_id)
         if not weibo:
             flash('未找到该微博', 'error')
             return redirect(url_for('favorites'))

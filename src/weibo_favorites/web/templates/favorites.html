@@ -7,91 +7,116 @@
     <div class="bg-white shadow rounded-lg p-6">
         <h1 class="text-2xl font-bold mb-6">收藏列表 <small class="text-muted">共 {{ total }} 条</small></h1>
         
-        {% for item in items %}
-        <div class="border border-gray-200 rounded-lg p-4 mb-4 hover:shadow-md transition-shadow">
-            <div class="space-y-2">
-                <!-- 微博内容 -->
-                <div class="text-gray-800">{{ item.text_html|safe }}</div>
+        <div class="container mx-auto px-4 py-8">
+            <!-- 搜索框 -->
+            <div class="mb-6">
+                <form action="{{ url_for('favorites') }}" method="get" class="flex gap-2">
+                    <input type="text" name="q" value="{{ query }}" placeholder="搜索微博内容..." 
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        搜索
+                    </button>
+                </form>
+            </div>
 
-                <!-- 图片展示 -->
-                {% if item.images %}
-                <div class="mt-4">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {% for image in item.images %}
-                        {% if image.data_url %}
-                        <div class="relative w-[200px] h-[200px]">
-                            <img src="{{ image.data_url }}" 
-                                 alt="微博图片" 
-                                 class="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                 onclick="openImageViewer(this.src)"
-                                 loading="lazy">
-                        </div>
+            <!-- 搜索结果提示 -->
+            {% if query %}
+            <div class="mb-4 text-sm text-gray-600">
+                搜索 "{{ query }}" 找到 {{ total }} 条结果
+            </div>
+            {% endif %}
+
+            {% for item in items %}
+            <div class="border border-gray-200 rounded-lg p-4 mb-4 hover:shadow-md transition-shadow">
+                <div class="space-y-2">
+                    <!-- 微博文本内容 -->
+                    <div class="text-gray-800 mb-4">
+                        {% if query and item.matched_text %}
+                            {{ item.matched_text|safe }}
+                        {% else %}
+                            {{ item.text_html|safe }}
                         {% endif %}
+                    </div>
+
+                    <!-- 图片展示 -->
+                    {% if item.images %}
+                    <div class="mt-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {% for image in item.images %}
+                            {% if image.data_url %}
+                            <div class="relative w-[200px] h-[200px]">
+                                <img src="{{ image.data_url }}" 
+                                     alt="微博图片" 
+                                     class="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                     loading="lazy">
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- 链接展示 -->
+                    {% if item.links %}
+                    <div class="flex flex-col gap-2 mt-2 mb-2">
+                        {% for link in item.links.split(',') %}
+                        <a href="{{ link }}" target="_blank" class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors duration-200 max-w-[33%] w-fit">
+                            <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                            </svg>
+                            <span class="truncate">{{ link }}</span>
+                        </a>
                         {% endfor %}
                     </div>
-                </div>
-                {% endif %}
-                
-                <!-- 链接展示 -->
-                {% if item.links %}
-                <div class="flex flex-col gap-2 mt-2 mb-2">
-                    {% for link in item.links.split(',') %}
-                    <a href="{{ link }}" target="_blank" class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors duration-200 max-w-[33%] w-fit">
-                        <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        <span class="truncate">{{ link }}</span>
-                    </a>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                <!-- 微博元数据 -->
-                <div class="flex items-center space-x-4 text-sm text-gray-500">
-                    <span>
-                        <i class="bi bi-person"></i> {{ item.user_name }}
-                    </span>
-                    <span>
-                        <i class="bi bi-clock"></i> {{ item.created_at }}
-                    </span>
-                    <span>
-                        <i class="bi bi-link-45deg"></i>
-                        <a href="{{ item.url }}" target="_blank" class="text-indigo-600 hover:text-indigo-900">查看原文</a>
-                    </span>
-                    {% if item.is_long_text or item.images %}
-                    <span>
-                        <i class="bi bi-box-arrow-up-right"></i>
-                        <a href="{{ url_for('weibo_detail', weibo_id=item.id) }}" class="text-indigo-600 hover:text-indigo-900">查看详情</a>
-                    </span>
                     {% endif %}
+
+                    <!-- 微博元数据 -->
+                    <div class="flex items-center space-x-4 text-sm text-gray-500">
+                        <span>
+                            <i class="bi bi-person"></i> {{ item.user_name }}
+                        </span>
+                        <span>
+                            <i class="bi bi-clock"></i> {{ item.created_at }}
+                        </span>
+                        <span>
+                            <i class="bi bi-link-45deg"></i>
+                            <a href="{{ item.url }}" target="_blank" class="text-indigo-600 hover:text-indigo-900">查看原文</a>
+                        </span>
+                        {% if item.is_long_text or item.images %}
+                        <span>
+                            <i class="bi bi-box-arrow-up-right"></i>
+                            <a href="{{ url_for('weibo_detail', weibo_id=item.id) }}" class="text-indigo-600 hover:text-indigo-900">查看详情</a>
+                        </span>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
-        </div>
-        {% endfor %}
+            {% endfor %}
 
-        {% if total_pages > 1 %}
-        <div class="flex justify-center mt-6">
-            <nav class="inline-flex rounded-md shadow">
-                {% if page > 1 %}
-                <a href="{{ url_for('favorites', page=page-1) }}" 
-                   class="px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    上一页
-                </a>
-                {% endif %}
-                
-                <span class="px-3 py-2 border-t border-b border-gray-300 bg-white text-sm font-medium text-gray-700">
-                    第 {{ page }} 页，共 {{ total_pages }} 页
-                </span>
-                
-                {% if page < total_pages %}
-                <a href="{{ url_for('favorites', page=page+1) }}"
-                   class="px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    下一页
-                </a>
-                {% endif %}
-            </nav>
+            {% if total_pages > 1 %}
+            <div class="flex justify-center mt-6">
+                <nav class="inline-flex rounded-md shadow">
+                    {% if page > 1 %}
+                    <a href="{{ url_for('favorites', page=page-1, q=query) }}" 
+                       class="px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        上一页
+                    </a>
+                    {% endif %}
+                    
+                    <span class="px-3 py-2 border-t border-b border-gray-300 bg-white text-sm font-medium text-gray-700">
+                        第 {{ page }} 页，共 {{ total_pages }} 页
+                    </span>
+                    
+                    {% if page < total_pages %}
+                    <a href="{{ url_for('favorites', page=page+1, q=query) }}"
+                       class="px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        下一页
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
