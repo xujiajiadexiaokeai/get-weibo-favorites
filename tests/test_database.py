@@ -1,8 +1,5 @@
-import os
-import sqlite3
-from datetime import datetime
-
 import pytest
+from datetime import datetime
 
 from weibo_favorites import config
 from weibo_favorites.database import (
@@ -16,20 +13,27 @@ from weibo_favorites.database import (
 )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_mode():
+    """在所有测试用例执行完后，禁用测试模式"""
+    yield
+    print("禁用测试模式")
+    config.settings.disable_test_mode()
+
+
 @pytest.fixture(autouse=True)
 def setup_test_db():
     """设置测试数据库"""
-    # 保存原始配置
-    original_db_path = config.DATABASE_FILE
-    original_extension_path = config.EXTENSION_SIMPLE_PATH
-
     # 设置测试配置
-    test_db_path = config.DATA_DIR / "test_weibo_favorites.db"
-    config.DATABASE_FILE = test_db_path
-
+    test_db_path = config.settings.DATA_DIR / "test_weibo_favorites.db"
+    
     # 确保测试数据库不存在
     if test_db_path.exists():
         test_db_path.unlink()
+
+    # 启用测试模式
+    config.settings.enable_test_mode(db_path=test_db_path)
+    print(f"启用测试模式，测试数据库路径：{config.settings.DATABASE_FILE}")
 
     # 创建数据库表
     with get_connection() as conn:
@@ -84,12 +88,8 @@ def setup_test_db():
     yield
 
     # 清理测试数据库
-    if os.path.exists(test_db_path):
-        os.remove(test_db_path)
-
-    # 恢复原始配置
-    config.DATABASE_FILE = original_db_path
-    config.EXTENSION_SIMPLE_PATH = original_extension_path
+    if test_db_path.exists():
+        test_db_path.unlink()
 
 
 def test_save_weibo():
@@ -120,14 +120,21 @@ def test_save_weibo():
     # 验证保存结果
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM weibo_favorites WHERE id = ?", (test_weibo["id"],))
+        cursor.execute(
+            """
+            SELECT id, mblogid, is_long_text, text
+            FROM weibo_favorites
+            WHERE id = ?
+            """,
+            (test_weibo["id"],)
+        )
         result = cursor.fetchone()
 
     assert result is not None
     assert result[0] == test_weibo["id"]  # id
     assert result[1] == test_weibo["mblogid"]  # mblogid
-    assert result[6] == test_weibo["is_long_text"]  # is_long_text
-    assert result[7] == test_weibo["text"]  # text
+    assert result[2] == test_weibo["is_long_text"]  # is_long_text
+    assert result[3] == test_weibo["text"]  # text
 
 
 def test_update_weibo_content():

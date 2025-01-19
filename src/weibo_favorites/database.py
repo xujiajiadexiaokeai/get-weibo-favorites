@@ -19,8 +19,13 @@ def get_connection() -> sqlite3.Connection:
     """
     conn = None
     try:
-        # 连接数据库
-        conn = sqlite3.connect(config.DATABASE_FILE)
+        # 连接数据库，设置超时和隔离级别
+        conn = sqlite3.connect(
+            config.settings.DATABASE_FILE,
+            timeout=20.0,  # 设置更长的超时时间
+            isolation_level=None,  # 自动提交模式
+        )
+        conn.execute("PRAGMA journal_mode=WAL")  # 使用 WAL 模式提高并发性能
         
         # 加载SQLite扩展
         conn.enable_load_extension(True)

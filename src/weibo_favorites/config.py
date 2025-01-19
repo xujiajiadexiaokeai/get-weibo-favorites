@@ -1,12 +1,17 @@
 """Configuration module for the Weibo Favorites Crawler."""
 
 from pathlib import Path
+from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field, computed_field
 
 class Settings(BaseSettings):
     # Project root directory
     PROJECT_ROOT: Path = Field(default=Path(__file__).parent.parent.parent, description="项目根目录")
+    
+    # Test mode settings
+    _test_mode: bool = False
+    _test_db_path: Optional[Path] = None
 
     @computed_field(description="数据目录")
     @property
@@ -37,6 +42,9 @@ class Settings(BaseSettings):
     @computed_field(description="数据库文件")
     @property
     def DATABASE_FILE(self) -> str:
+        print("DATABASE_FILE", self._test_mode, self._test_db_path)
+        if self._test_mode and self._test_db_path:
+            return str(self._test_db_path)
         return str(self.DATA_DIR / "weibo_favorites.db")
 
     @computed_field(description="爬虫状态文件")
@@ -104,7 +112,21 @@ class Settings(BaseSettings):
     # Extension configuration
     EXTENSION_SIMPLE_PATH: str = Field(default="libs/libsimple", description="扩展模块路径")
 
-    class Config:
+    def enable_test_mode(self, db_path: Optional[Path] = None) -> None:
+        """启用测试模式，可以指定测试用的数据库文件路径
+
+        Args:
+            db_path: 测试数据库文件路径
+        """
+        self._test_mode = True
+        self._test_db_path = db_path
+
+    def disable_test_mode(self) -> None:
+        """禁用测试模式，恢复使用默认配置"""
+        self._test_mode = False
+        self._test_db_path = None
+
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
