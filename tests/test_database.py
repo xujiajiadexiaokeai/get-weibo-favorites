@@ -17,15 +17,16 @@ from weibo_favorites.database import (
 def cleanup_test_mode():
     """在所有测试用例执行完后，禁用测试模式"""
     yield
-    print("禁用测试模式")
     config.settings.disable_test_mode()
 
 
 @pytest.fixture(autouse=True)
-def setup_test_db():
+def setup_test_db(shared_tmp_path):
     """设置测试数据库"""
     # 设置测试配置
-    test_db_path = config.settings.DATA_DIR / "test_weibo_favorites.db"
+    test_db_dir = shared_tmp_path / "data"
+    test_db_dir.mkdir(exist_ok=True)
+    test_db_path = test_db_dir / "test_weibo_favorites.db"
     
     # 确保测试数据库不存在
     if test_db_path.exists():
@@ -33,7 +34,6 @@ def setup_test_db():
 
     # 启用测试模式
     config.settings.enable_test_mode(db_path=test_db_path)
-    print(f"启用测试模式，测试数据库路径：{config.settings.DATABASE_FILE}")
 
     # 创建数据库表
     with get_connection() as conn:

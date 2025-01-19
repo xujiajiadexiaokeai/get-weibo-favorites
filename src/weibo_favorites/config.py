@@ -42,7 +42,6 @@ class Settings(BaseSettings):
     @computed_field(description="数据库文件")
     @property
     def DATABASE_FILE(self) -> str:
-        print("DATABASE_FILE", self._test_mode, self._test_db_path)
         if self._test_mode and self._test_db_path:
             return str(self._test_db_path)
         return str(self.DATA_DIR / "weibo_favorites.db")
