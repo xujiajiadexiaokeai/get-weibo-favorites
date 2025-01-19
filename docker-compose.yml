@@ -1,0 +1,60 @@
+name: get-weibo-favorites
+
+services:
+  queue-worker:
+    build:
+      context: .
+      dockerfile: docker/queue-worker/Dockerfile
+    container_name: queue-worker
+    volumes:
+      - ./data:/app/data  # 挂载数据目录
+      - ./logs:/app/logs  # 挂载日志目录
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=rq-crawl-queue  # Redis 主机名，使用服务名
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - TZ=Asia/Shanghai  # 设置时区环境变量
+    depends_on:
+      - rq-crawl-queue
+    restart: unless-stopped
+    networks:
+      - weibo-network
+
+  rq-crawl-queue:
+    image: redis:latest
+    container_name: rq-crawl-queue  # 指定容器名
+    command: redis-server --appendonly yes  # 启用 AOF 持久化
+    volumes:
+      - redis-data:/data  # Redis 数据持久化
+    environment:
+      - TZ=Asia/Shanghai  # 设置时区环境变量
+    ports:
+      - "6379:6379"      # 暴露端口，方便调试
+    networks:
+      - weibo-network
+    restart: unless-stopped
+
+  rq-dashboard:
+    build:
+      context: ./docker/rq-dashboard
+      dockerfile: Dockerfile
+    container_name: rq-dashboard
+    environment:
+      - RQ_DASHBOARD_REDIS_URL=redis://rq-crawl-queue:6379  # 明确指定 Redis URL
+      - TZ=Asia/Shanghai  # 设置时区环境变量
+    ports:
+      - "9181:9181"      # RQ Dashboard 端口
+    depends_on:
+      - rq-crawl-queue
+    networks:
+      - weibo-network
+    restart: unless-stopped
+
+volumes:
+  redis-data:  # Redis 数据卷
+
+networks:
+  weibo-network:
+    name: weibo-network

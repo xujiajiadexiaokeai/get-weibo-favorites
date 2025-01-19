@@ -13,6 +13,7 @@ setup(
         "redis>=5.0.0",
         "rq>=1.15.1",
         "python-dotenv>=1.0.0",
+        "pydantic-settings>=2.7.1",
         "Pillow>=10.1.0",
         "rq-scheduler>=0.13.1",
     ],
